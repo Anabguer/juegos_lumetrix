@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test API Lumetrix</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #fff; }
+        button { padding: 10px; margin: 5px; background: #333; color: #fff; border: 1px solid #666; cursor: pointer; }
+        button:hover { background: #555; }
+        .result { margin: 10px 0; padding: 10px; background: #222; border-radius: 5px; }
+        input { padding: 8px; margin: 5px; background: #333; color: #fff; border: 1px solid #666; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test API Lumetrix</h1>
+    
+    <div>
+        <h3>1. Registrar usuario</h3>
+        <input id="reg_user" placeholder="Usuario" value="neni">
+        <input id="reg_email" placeholder="Email" value="neni@mail.com">
+        <input id="reg_pass" placeholder="Contraseña" type="password" value="1234">
+        <button onclick="testRegister()">Registrar</button>
+        <div id="reg_result" class="result"></div>
+    </div>
+
+    <div>
+        <h3>2. Login</h3>
+        <input id="login_user" placeholder="Usuario o email" value="neni@mail.com">
+        <input id="login_pass" placeholder="Contraseña" type="password" value="1234">
+        <button onclick="testLogin()">Login</button>
+        <div id="login_result" class="result"></div>
+    </div>
+
+    <div>
+        <h3>3. Verificar sesión</h3>
+        <button onclick="testCheck()">Verificar Sesión</button>
+        <div id="check_result" class="result"></div>
+    </div>
+
+    <div>
+        <h3>4. Simular guardado de progreso</h3>
+        <input id="sim_level" placeholder="Nivel" value="5" type="number">
+        <input id="sim_time" placeholder="Tiempo (s)" value="120" type="number">
+        <select id="sim_success">
+            <option value="1">Ganar (success: 1)</option>
+            <option value="0">Perder (success: 0)</option>
+        </select>
+        <button onclick="testSaveProgress()">Guardar Progreso</button>
+        <div id="save_result" class="result"></div>
+    </div>
+
+    <div>
+        <h3>5. Ver ranking</h3>
+        <button onclick="testRanking()">Ver Ranking</button>
+        <div id="ranking_result" class="result"></div>
+    </div>
+
+    <div>
+        <h3>6. Ir al juego</h3>
+        <button onclick="window.open('app_lumetrix.html', '_blank')">Abrir Juego</button>
+    </div>
+
+    <script src="sistema_apps_api/lumetrix/js/api.js"></script>
+    <script src="sistema_apps_api/lumetrix/js/auth.js"></script>
+
+    <script>
+        async function testRegister() {
+            const user = document.getElementById('reg_user').value;
+            const email = document.getElementById('reg_email').value;
+            const pass = document.getElementById('reg_pass').value;
+            
+            try {
+                const result = await window.LUM_API.api('auth.php?action=register', {
+                    method: 'POST',
+                    body: JSON.stringify({ username: user, email: email, password: pass })
+                });
+                document.getElementById('reg_result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('reg_result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+            }
+        }
+
+        async function testLogin() {
+            const user = document.getElementById('login_user').value;
+            const pass = document.getElementById('login_pass').value;
+            
+            try {
+                const result = await window.LUM_AUTH.lum_login({ username: user, password: pass });
+                document.getElementById('login_result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('login_result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+            }
+        }
+
+        async function testCheck() {
+            try {
+                const result = await window.LUM_AUTH.lum_check();
+                document.getElementById('check_result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('check_result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+            }
+        }
+
+        async function testSaveProgress() {
+            const level = parseInt(document.getElementById('sim_level').value);
+            const time = parseInt(document.getElementById('sim_time').value);
+            const success = parseInt(document.getElementById('sim_success').value);
+            
+            try {
+                const result = await window.LUM_API.api('game.php?action=save_progress', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        level: level,
+                        total_time_s: time,
+                        success: success
+                    })
+                });
+                document.getElementById('save_result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('save_result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+            }
+        }
+
+        async function testRanking() {
+            try {
+                const result = await window.LUM_API.api('ranking.php?action=global');
+                document.getElementById('ranking_result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('ranking_result').innerHTML = '<pre>Error: ' + error.message + '</pre>';
+            }
+        }
+    </script>
+</body>
+</html>
