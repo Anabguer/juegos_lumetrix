@@ -124,7 +124,12 @@ function useSFX(enabled){
     }catch{}
   };
   return {
-    start: ()=>tone(600,0.1,'triangle',0.06),
+    start: ()=>{ 
+      // Sonido de inicio distintivo: acorde ascendente
+      tone(440,0.15,'sawtooth',0.08); // La
+      setTimeout(()=>tone(554,0.15,'sawtooth',0.08), 50); // Do#
+      setTimeout(()=>tone(659,0.15,'sawtooth',0.08), 100); // Mi
+    },
     ok:    (f)=>tone(f||880,0.1,'triangle',0.07),
     fail:  ()=>tone(260,0.12,'sine',0.045), // suave "meck"
     blink: (f)=>tone(f||720,0.08,'sine',0.05),
