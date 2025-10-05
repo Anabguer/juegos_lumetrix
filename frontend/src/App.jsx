@@ -941,7 +941,12 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const saveTotal=(secs)=>{ try{ const prev=Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; const next=prev+secs; localStorage.setItem('lum_total', JSON.stringify(next)); setTotalTime(next); if (typeof onTotalUpdate === 'function') onTotalUpdate(next); }catch{} };
 
   function placeTiles(n, currentSpecialId = null, doubleTilesOverride = null){
-    const currentDoubleTiles = doubleTilesOverride || doubleTouchTilesRef.current;
+    // Determinar qué set usar según el mundo/nivel
+    const config = getLevelConfig(level);
+    const mechanics = config.mechanics;
+    const isCombo = mechanics.includes('drag') && mechanics.includes('double');
+    
+    const currentDoubleTiles = doubleTilesOverride || (isCombo ? comboDoubleTiles : doubleTouchTilesRef.current);
     console.log(`placeTiles llamado: n=${n}, currentSpecialId=${currentSpecialId}, doubleTouchTiles=`, Array.from(currentDoubleTiles));
     const board = boardRef.current; if(!board) return;
     board.querySelectorAll('.tile, .dropzone').forEach(e=>e.remove());
