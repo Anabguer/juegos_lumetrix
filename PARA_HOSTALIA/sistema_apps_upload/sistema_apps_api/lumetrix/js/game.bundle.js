@@ -6255,12 +6255,12 @@ function Yp({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
           H.style.border = `1px solid ${B}`, H.style.boxShadow = `0 0 8px ${B}88`, H.style.cursor = "grab", H.addEventListener("pointerdown", (ln) => Du(ln, F)), H.addEventListener("dragstart", (ln) => ln.preventDefault());
         } else if (ju.has(F)) {
           const B = H.style.background;
-          H.style.border = `2px double ${B}`, H.style.boxShadow = `0 0 8px ${B}88, inset 0 0 6px ${B}44`;
+          H.style.border = `4px double ${B}`, H.style.boxShadow = `0 0 12px ${B}aa, inset 0 0 8px ${B}66`;
         } else
           H.style.border = "1px solid rgba(255,255,255,0.2)", H.style.boxShadow = "none";
       else if (console.log(`Procesando ficha ${F}, doubleTouchTiles:`, Array.from(A), `¿Tiene ${F}?`, A.has(F)), A.has(F)) {
         const B = H.style.background;
-        H.style.border = `2px double ${B}`, H.style.boxShadow = `0 0 8px ${B}88, inset 0 0 6px ${B}44`, console.log(`Ficha ${F} marcada como doble toque - ESTILOS APLICADOS`);
+        H.style.border = `4px double ${B}`, H.style.boxShadow = `0 0 12px ${B}aa, inset 0 0 8px ${B}66`, console.log(`Ficha ${F} marcada como doble toque - ESTILOS APLICADOS con borde 4px`);
       }
       T.appendChild(H);
     }

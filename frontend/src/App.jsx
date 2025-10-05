@@ -819,10 +819,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           b.addEventListener('pointerdown', (e) => onTilePointerDown(e, i));
           b.addEventListener('dragstart', (e) => e.preventDefault());
         } else if (comboDoubleTiles.has(i)) {
-          // Ficha de doble toque en combo - borde doble sutil del color de la pieza
+          // Ficha de doble toque en combo - borde doble más visible
           const tileColor = b.style.background;
-          b.style.border = `2px double ${tileColor}`;
-          b.style.boxShadow = `0 0 8px ${tileColor}88, inset 0 0 6px ${tileColor}44`;
+          b.style.border = `4px double ${tileColor}`;
+          b.style.boxShadow = `0 0 12px ${tileColor}aa, inset 0 0 8px ${tileColor}66`;
         } else {
           // Ficha de toque normal en combo - sin borde especial
           b.style.border = '1px solid rgba(255,255,255,0.2)';
@@ -832,11 +832,11 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         // Mundos 1-4: mecánicas individuales
         console.log(`Procesando ficha ${i}, doubleTouchTiles:`, Array.from(currentDoubleTiles), `¿Tiene ${i}?`, currentDoubleTiles.has(i));
         if (currentDoubleTiles.has(i)) {
-          // Ficha de doble toque (Mundo 4) - borde doble sutil del color de la pieza
+          // Ficha de doble toque (Mundo 4) - borde doble más visible
           const tileColor = b.style.background;
-          b.style.border = `2px double ${tileColor}`;
-          b.style.boxShadow = `0 0 8px ${tileColor}88, inset 0 0 6px ${tileColor}44`;
-          console.log(`Ficha ${i} marcada como doble toque - ESTILOS APLICADOS`);
+          b.style.border = `4px double ${tileColor}`;
+          b.style.boxShadow = `0 0 12px ${tileColor}aa, inset 0 0 8px ${tileColor}66`;
+          console.log(`Ficha ${i} marcada como doble toque - ESTILOS APLICADOS con borde 4px`);
         }
       }
       
