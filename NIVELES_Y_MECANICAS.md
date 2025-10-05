@@ -63,23 +63,25 @@
 ---
 
 ### 🌍 **MUNDO 4 - Doble Toque y Combinaciones (Niveles 31-40)**
+**Progresión lógica**: Solo doble toque → Solo arrastre → Combinaciones de 2 mecánicas
 
 | Nivel | Mecánica | Fichas | Tiempo | Descripción |
 |-------|----------|--------|--------|-------------|
-| **31** | `double` | 5 | 30s | Solo doble toque |
-| **32** | `double` | 5 | 28s | Solo doble toque |
-| **33** | `double` | 6 | 26s | Solo doble toque |
-| **34** | `drag + double` | 6 | 24s | Arrastre + doble toque |
-| **35** | `touch + drag` | 7 | 22s | Toque + arrastre |
-| **36** | `double` | 7 | 20s | Solo doble toque |
-| **37** | `touch + drag + double` | 8 | 18s | **COMBO** - todas las mecánicas |
-| **38** | `drag + double` | 8 | 17s | Arrastre + doble toque |
-| **39** | `touch + double` | 9 | 16s | Toque + doble toque |
-| **40** | `touch + drag + double` | 9 | 15s | **COMBO** - todas las mecánicas |
+| **31** | `double` | 5 | 30s | 1 ficha de doble toque + 4 normales |
+| **32** | `double` | 5 | 28s | 1 ficha de doble toque + 4 normales |
+| **33** | `double` | 6 | 26s | 1 ficha de doble toque + 5 normales |
+| **34** | `drag + double` | 6 | 24s | 1 ficha de arrastre + 1 de doble toque + 4 normales |
+| **35** | `drag` | 7 | 22s | 1 ficha de arrastre + 6 normales |
+| **36** | `double` | 7 | 20s | 1 ficha de doble toque + 6 normales |
+| **37** | `drag + double` | 8 | 18s | 1 ficha de arrastre + 1 de doble toque + 6 normales |
+| **38** | `drag + double` | 8 | 17s | 1 ficha de arrastre + 1 de doble toque + 6 normales |
+| **39** | `double` | 9 | 16s | 1 ficha de doble toque + 8 normales |
+| **40** | `drag + double` | 9 | 15s | 1 ficha de arrastre + 1 de doble toque + 7 normales |
 
 ---
 
 ### 🌍 **MUNDO 5 - Dominio Total (Niveles 41-50)**
+**Progresión lógica**: COMBO - mezcla de todas las mecánicas
 - **Mecánica**: `touch + drag + double` (COMBO - todas las mecánicas)
 - **Fichas**: 6→7→8→8→9→9→9→9→9→9
 - **Tiempo**: 26s→24s→22s→20s→19s→18s→17s→16s→15s→14s
@@ -105,6 +107,7 @@
 - **Qué hacer**: Toca la ficha cuando sea su turno en la secuencia
 - **Visual**: Ficha normal sin borde especial
 - **Sonido**: Se reproduce al tocarla correctamente
+- **IMPORTANTE**: `touch` es el comportamiento por defecto de TODAS las fichas normales
 
 ### 🔵 **`drag` - Arrastre**
 - **Qué hacer**: Arrastra la ficha especial a la zona de drop cuando sea su turno
