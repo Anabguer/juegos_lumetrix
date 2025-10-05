@@ -810,36 +810,31 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       // Estilos según mecánica (Mundo 5 combo tiene prioridad)
       if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
         if (comboDragTiles.has(i)) {
-          // Ficha de arrastre en combo
-          b.style.border = '3px solid #ff6b6b';
-          b.style.boxShadow = '0 0 15px #ff6b6b';
+          // Ficha de arrastre en combo - borde sutil del color de la pieza
+          const tileColor = b.style.background;
+          b.style.border = `1px solid ${tileColor}`;
+          b.style.boxShadow = `0 0 8px ${tileColor}88`;
           b.style.cursor = 'grab';
           b.addEventListener('pointerdown', (e) => onTilePointerDown(e, i));
           b.addEventListener('dragstart', (e) => e.preventDefault());
         } else if (comboDoubleTiles.has(i)) {
-          // Ficha de doble toque en combo
-          b.style.border = '3px double #00ffff';
-          b.style.boxShadow = '0 0 15px #00ffff, inset 0 0 10px #00ffff';
+          // Ficha de doble toque en combo - borde doble sutil del color de la pieza
+          const tileColor = b.style.background;
+          b.style.border = `2px double ${tileColor}`;
+          b.style.boxShadow = `0 0 8px ${tileColor}88, inset 0 0 6px ${tileColor}44`;
         } else {
-          // Ficha de toque normal en combo
-          b.style.border = '3px solid #39ff14';
-          b.style.boxShadow = '0 0 10px #39ff14';
+          // Ficha de toque normal en combo - sin borde especial
+          b.style.border = '1px solid rgba(255,255,255,0.2)';
+          b.style.boxShadow = 'none';
         }
       } else {
         // Mundos 1-4: mecánicas individuales
         console.log(`Procesando ficha ${i}, doubleTouchTiles:`, Array.from(currentDoubleTiles), `¿Tiene ${i}?`, currentDoubleTiles.has(i));
         if (currentDoubleTiles.has(i)) {
-          // Ficha de doble toque (Mundo 4) - borde doble muy marcado con dos líneas paralelas
-          b.style.border = '6px double #00ffff';
-          b.style.boxShadow = `
-            0 0 20px #00ffff, 
-            inset 0 0 20px #00ffff, 
-            0 0 30px #00ffff,
-            inset 2px 2px 0 #00ffff,
-            inset -2px -2px 0 #00ffff
-          `;
-          b.style.outline = '4px solid #00ffff';
-          b.style.outlineOffset = '-8px';
+          // Ficha de doble toque (Mundo 4) - borde doble sutil del color de la pieza
+          const tileColor = b.style.background;
+          b.style.border = `2px double ${tileColor}`;
+          b.style.boxShadow = `0 0 8px ${tileColor}88, inset 0 0 6px ${tileColor}44`;
           console.log(`Ficha ${i} marcada como doble toque - ESTILOS APLICADOS`);
         }
       }
