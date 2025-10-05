@@ -1,63 +1,105 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 /**
- * LUMETRIX – React (build-safe, JS only)
- *
- * Esta versión soluciona el error de build por variables no definidas
- * y mantiene todo lo que tenías funcional:
- *  - Sonido robusto (no rompe si no hay AudioContext) y melodía de victoria corta con 300ms de retraso
- *  - Colores por nivel (las fichas aciertan pintando al color del borde)
- *  - Al empezar un nivel NUNCA hay fichas del color del borde
- *  - Pista inicial con retardo
- *  - Tiempo acumulado por intento (derrota o victoria), con reset en Opciones
- *  - Selector de nivel (debug) en Opciones
- *  - Overlays: ganar ✨ / perder 💔 con margen correcto
+ * LUMETRIX – React (versión completa con todas las mecánicas)
+ * 
+ * ✅ Selector de mundos y niveles
+ * ✅ Mecánicas: Touch, Drag, Double-tap, Combo
+ * ✅ 50 niveles configurados
+ * ✅ Colores neones
+ * ✅ Sistema completo de juego
  */
 
-// ---------------- Utilidades de nivel ----------------
+// ---------------- Configuración de niveles ----------------
+const LEVEL_CONFIG = {
+  // Mundo 1: Introducción (niveles 1-10)
+  1: { mechanics: ["touch"], tiles: 4, time: 35 },
+  2: { mechanics: ["touch"], tiles: 4, time: 35 },
+  3: { mechanics: ["touch"], tiles: 5, time: 34 },
+  4: { mechanics: ["touch"], tiles: 5, time: 34 },
+  5: { mechanics: ["touch"], tiles: 6, time: 33 },
+  6: { mechanics: ["touch"], tiles: 6, time: 33 },
+  7: { mechanics: ["touch"], tiles: 7, time: 32 },
+  8: { mechanics: ["touch"], tiles: 8, time: 31 },
+  9: { mechanics: ["touch"], tiles: 9, time: 30 },
+  10: { mechanics: ["touch"], tiles: 9, time: 30 },
+  
+  // Mundo 2: Arrastre (niveles 11-20)
+  11: { mechanics: ["drag"], tiles: 5, time: 29 },
+  12: { mechanics: ["drag"], tiles: 5, time: 29 },
+  13: { mechanics: ["drag"], tiles: 6, time: 28 },
+  14: { mechanics: ["drag"], tiles: 6, time: 28 },
+  15: { mechanics: ["drag"], tiles: 7, time: 27 },
+  16: { mechanics: ["drag"], tiles: 7, time: 27 },
+  17: { mechanics: ["drag"], tiles: 8, time: 26 },
+  18: { mechanics: ["drag"], tiles: 8, time: 26 },
+  19: { mechanics: ["drag"], tiles: 9, time: 25 },
+  20: { mechanics: ["drag"], tiles: 9, time: 25 },
+  
+  // Mundo 3: Arrastre avanzado (niveles 21-30)
+  21: { mechanics: ["drag"], tiles: 6, time: 24 },
+  22: { mechanics: ["drag"], tiles: 6, time: 24 },
+  23: { mechanics: ["drag"], tiles: 7, time: 23 },
+  24: { mechanics: ["drag"], tiles: 7, time: 23 },
+  25: { mechanics: ["drag"], tiles: 8, time: 22 },
+  26: { mechanics: ["drag"], tiles: 8, time: 22 },
+  27: { mechanics: ["drag"], tiles: 9, time: 21 },
+  28: { mechanics: ["drag"], tiles: 9, time: 21 },
+  29: { mechanics: ["drag"], tiles: 10, time: 20 },
+  30: { mechanics: ["drag"], tiles: 10, time: 20 },
+  
+  // Mundo 4: Doble toque (niveles 31-40)
+  31: { mechanics: ["double"], tiles: 6, time: 24 },
+  32: { mechanics: ["double"], tiles: 6, time: 24 },
+  33: { mechanics: ["double"], tiles: 7, time: 23 },
+  34: { mechanics: ["drag"], tiles: 7, time: 23 },
+  35: { mechanics: ["double"], tiles: 8, time: 22 },
+  36: { mechanics: ["drag"], tiles: 8, time: 22 },
+  37: { mechanics: ["drag"], tiles: 9, time: 21 },
+  38: { mechanics: ["double"], tiles: 9, time: 21 },
+  39: { mechanics: ["drag"], tiles: 10, time: 20 },
+  40: { mechanics: ["double"], tiles: 10, time: 20 },
+  
+  // Mundo 5: Combo final (niveles 41-50)
+  41: { mechanics: ["drag", "double"], tiles: 7, time: 23 },
+  42: { mechanics: ["drag", "double"], tiles: 7, time: 23 },
+  43: { mechanics: ["drag", "double"], tiles: 8, time: 22 },
+  44: { mechanics: ["drag", "double"], tiles: 8, time: 22 },
+  45: { mechanics: ["drag", "double"], tiles: 9, time: 21 },
+  46: { mechanics: ["drag", "double"], tiles: 9, time: 21 },
+  47: { mechanics: ["drag", "double"], tiles: 10, time: 20 },
+  48: { mechanics: ["drag", "double"], tiles: 10, time: 20 },
+  49: { mechanics: ["drag", "double"], tiles: 11, time: 19 },
+  50: { mechanics: ["drag", "double"], tiles: 11, time: 19 }
+};
+
+function getLevelConfig(level) {
+  return LEVEL_CONFIG[level] || { mechanics: ["touch"], tiles: 4, time: 35 };
+}
+
+// ---------------- Colores neones ----------------
 const ACCENTS = [
-  "#39ff14", // lima
-  "#ff2fbf", // fucsia
-  "#00e5ff", // cian
-  "#ff6b6b", // coral
-  "#ffd93d", // amarillo
-  "#7c3aed", // violeta
+  "#32ff32", // lima más neón
+  "#ff32ff", // fucsia más neón
+  "#32ffff", // cian más neón
+  "#ff6464", // coral más neón
+  "#ffff32", // amarillo más neón
+  "#ff64ff", // violeta más neón
 ];
-const ACCENT_HUE = { "#39ff14":110, "#ff2fbf":320, "#00e5ff":190, "#ff6b6b":0, "#ffd93d":55, "#7c3aed":265 };
+const ACCENT_HUE = { "#32ff32":110, "#ff32ff":320, "#32ffff":190, "#ff6464":0, "#ffff32":55, "#ff64ff":265 };
 function colorForLevel(level){ return ACCENTS[(level-1) % ACCENTS.length]; }
-function tilesFor(level){
-  const world = Math.floor((level-1)/10) + 1;
-  const idx = ((level-1)%10) + 1;
-  
-  // Mundo 1: Introducción (4-8 fichas)
-  const M1 = [4,4,5,5,6,6,7,7,8,8];
-  
-  // Mundo 2: Arrastre (igual que Mundo 1)
-  const M2 = [4,4,5,5,6,6,7,7,8,8];
-  
-  // Mundo 3: Más fichas + Arrastre (+1 ficha respecto a Mundo 1)
-  const M3 = [5,5,6,6,7,7,8,8,9,9];
-  
-  // Mundo 4: Nueva mecánica (igual que Mundo 3 o un poco más)
-  const M4 = [5,5,6,6,7,7,8,8,9,9];
-  
-  const tables = [M1, M2, M3, M4];
-  const table = tables[world-1] || M4;
-  return table[idx-1] || 9;
-}
-function timeFor(level){
-  const base = 35; const min = 20; const dec = Math.floor((level-1)/2);
-  return Math.max(min, base - dec);
-}
+function tilesFor(level){ return getLevelConfig(level).tiles; }
+function timeFor(level){ return getLevelConfig(level).time; }
 
 function getWorldMechanics(world){
   const mechanics = {
     1: { name: 'Introducción', description: 'Toques simples (antisimón)' },
     2: { name: 'Arrastre', description: 'Arrastra la ficha correcta' },
-    3: { name: 'Más fichas + Arrastre', description: 'Más fichas + arrastre' },
-    4: { name: 'Nueva mecánica', description: 'Próximamente...' }
+    3: { name: 'Arrastre Avanzado', description: 'Más fichas + arrastre' },
+    4: { name: 'Doble Toque', description: 'Toca dos veces las fichas especiales' },
+    5: { name: 'Combo Final', description: 'Arrastre + Doble toque' }
   };
-  return mechanics[world] || mechanics[4];
+  return mechanics[world] || mechanics[5];
 }
 
 // ---------------- Catálogo de melodías (hasta 15 notas) ----------------
@@ -167,6 +209,18 @@ function useLumetrixStyles(){
       .btn1{border-color:#f0abfc99;color:#f0abfc}.btn1:hover{background:#ff2fbf22}
       .btn2{border-color:#7dd3fc99;color:#7dd3fc}.btn2:hover{background:#00e5ff22}
       .copy{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:#ffffffb3;font-size:10px;z-index:3}
+      /* Selector de mundos */
+      .world-selector{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0;max-height:300px;overflow-y:auto}
+      .world-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px;cursor:pointer;transition:all 0.3s ease;position:relative}
+      .world-card:hover{background:rgba(255,255,255,0.1);border-color:var(--neon2);box-shadow:0 0 15px rgba(0,229,255,0.3)}
+      .world-number{font-size:10px;font-weight:700;color:var(--neon1);margin-bottom:4px;letter-spacing:0.5px}
+      .world-name{font-size:12px;font-weight:600;color:#fff;margin-bottom:2px}
+      .world-description{font-size:9px;color:#ffffff80;margin-bottom:6px;line-height:1.2}
+      .world-levels{font-size:8px;color:var(--neon2);margin-bottom:4px}
+      .world-progress{font-size:8px}
+      .world-progress .current{color:#39ff14;font-weight:600}
+      .world-progress .completed{color:#32ff32}
+      .world-progress .locked{color:#666}
       /* HUD / Board */
       .topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 10px}
       .brand{font-size:18px;font-weight:800;background:linear-gradient(90deg,var(--neon1),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -213,35 +267,30 @@ function useLumetrixStyles(){
   },[]);
 }
 
-// ---------------- Intro ----------------
-function Intro({ onPlay, onAuth }){
-  const bgRef = useRef(null); const logoRef = useRef(null);
+// ---------------- Intro con selector de mundos ----------------
+function Intro({ onPlay, onAuth, currentLevel, setLevel }){
+  const bgRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  
   useEffect(()=>{ 
     const bg=bgRef.current; if(!bg) return; 
     const spawn=()=>{ 
       const i=document.createElement('i'); 
-      // Más variedad de tamaños
       const w=20+Math.random()*25, h=40+Math.random()*60; 
-      
-      // Distribución dentro del área con margen (12px desde los bordes)
-      // El área de figuras es 100% - 24px (12px de margen en cada lado)
       let x, y;
-      const centerAvoid = Math.random() < 0.7; // 70% evitan el centro
+      const centerAvoid = Math.random() < 0.7;
       if (centerAvoid) {
-        // Zonas periféricas: bordes y esquinas (dentro del área con margen)
         const zones = [
-          {x: [0, 15], y: [0, 100]}, // Lado izquierdo
-          {x: [85, 100], y: [0, 100]}, // Lado derecho  
-          {x: [0, 100], y: [0, 15]}, // Parte superior
-          {x: [0, 100], y: [85, 100]}, // Parte inferior
+          {x: [0, 15], y: [0, 100]},
+          {x: [85, 100], y: [0, 100]},  
+          {x: [0, 100], y: [0, 15]},
+          {x: [0, 100], y: [85, 100]},
         ];
         const zone = zones[Math.floor(Math.random() * zones.length)];
         x = zone.x[0] + Math.random() * (zone.x[1] - zone.x[0]);
         y = zone.y[0] + Math.random() * (zone.y[1] - zone.y[0]);
       } else {
-        // 30% pueden aparecer en el centro (pero dentro del área con margen)
         x = Math.random()*100;
         y = Math.random()*100;
       }
@@ -251,19 +300,16 @@ function Intro({ onPlay, onAuth }){
       i.style.width=w+'px'; 
       i.style.height=h+'px'; 
       
-      // Colores más vibrantes y variados
-      const hues = [0, 60, 120, 180, 240, 300, 45, 135, 225, 315]; // Más colores neón
+      const hues = [0, 60, 120, 180, 240, 300, 45, 135, 225, 315];
       const hue = hues[Math.floor(Math.random() * hues.length)];
       i.style.background=`hsl(${hue} 95% 65% / .9)`; 
       bg.appendChild(i); 
-      setTimeout(()=>i.remove(), 3000); // Más tiempo visible
+      setTimeout(()=>i.remove(), 3000);
     }; 
-    const t=setInterval(spawn, 80); // Más frecuente (antes 120ms)
+    const t=setInterval(spawn, 80);
     return ()=>clearInterval(t); 
   },[]);
-  useEffect(()=>{ const fit=()=>{ const el=logoRef.current; if(!el) return; const panel=el.parentElement?.parentElement; if(!panel) return; el.style.fontSize=''; let size=Math.min(42, Math.max(28, Math.floor(panel.clientWidth*0.16))); el.style.fontSize=size+'px'; el.style.letterSpacing='0.16em'; let loops=0; while(el.scrollWidth>panel.clientWidth-24 && loops<20){ size-=1; el.style.fontSize=size+'px'; loops++; } }; fit(); const ro=new ResizeObserver(fit); ro.observe(document.body); return ()=>ro.disconnect(); },[]);
   
-  // Verificar estado de autenticación al cargar
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -280,6 +326,35 @@ function Intro({ onPlay, onAuth }){
     };
     checkAuth();
   }, []);
+
+  const renderWorldSelector = () => {
+    const worlds = [];
+    for (let world = 1; world <= 5; world++) {
+      const startLevel = (world - 1) * 10 + 1;
+      const endLevel = world * 10;
+      const mechanics = getWorldMechanics(world);
+      
+      worlds.push(
+        <div key={world} className="world-card" onClick={() => setLevel(startLevel)}>
+          <div className="world-number">MUNDO {world}</div>
+          <div className="world-name">{mechanics.name}</div>
+          <div className="world-description">{mechanics.description}</div>
+          <div className="world-levels">Niveles {startLevel}-{endLevel}</div>
+          <div className="world-progress">
+            {currentLevel >= startLevel && currentLevel <= endLevel ? (
+              <span className="current">Nivel actual: {currentLevel}</span>
+            ) : currentLevel > endLevel ? (
+              <span className="completed">✅ Completado</span>
+            ) : (
+              <span className="locked">🔒 Bloqueado</span>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return worlds;
+  };
+
   return (
     <section className="screen intro">
       <div className="introWrap">
@@ -301,8 +376,13 @@ function Intro({ onPlay, onAuth }){
             <div style={{display:'none',fontSize:'48px',fontWeight:'900',letterSpacing:'0.1em',background:'linear-gradient(90deg,#39ff14,#00ffff,#ff00ff)',WebkitBackgroundClip:'text',backgroundClip:'text',color:'transparent',textShadow:'0 0 20px #39ff14,0 0 40px #00ffff,0 0 60px #ff00ff'}}>LUMETRIX</div>
           </h1>
           <div style={{textAlign:'center',fontSize:18,opacity:.9,marginTop:20,marginBottom:8,lineHeight:'1.4',fontWeight:500}}>Esto no es un Simón: es el <b>anti‑Simón</b>.<br/><br/><b>Encuentra</b> la secuencia y pinta <b>todas</b> las piezas del color del borde.</div>
+          
+          <div className="world-selector">
+            {renderWorldSelector()}
+          </div>
+          
           <div className="actions" style={{marginTop:20}}>
-            <button className="btn btn1" onClick={onPlay}>Jugar</button>
+            <button className="btn btn1" onClick={() => onPlay(currentLevel)}>Continuar Nivel {currentLevel}</button>
             {!isLoggedIn && (
               <button className="btn btn2" onClick={onAuth}>Iniciar sesión</button>
             )}
@@ -532,21 +612,27 @@ function Game({ level, setLevel, soundOn, vibrateOn, onOpenAuth, onOpenRanking, 
 
   function start(nextLevelArg){
     const lv = (typeof nextLevelArg === 'number' ? nextLevelArg : level);
+    const config = getLevelConfig(lv);
     const root = boardRef.current?.closest('.device');
     paintRef.current = colorForLevel(lv);
     if (root) root.style.setProperty('--accent', paintRef.current);
 
     setWin(false); setLose(false); endedRef.current = false;
     if(timerRef.current) clearInterval(timerRef.current);
-    const n=tilesFor(lv);
+    
+    // Configurar mecánicas del nivel
+    setupLevelMechanics(config.mechanics);
+    
+    const n = config.tiles;
     seqRef.current = Array.from({length:n},(_,i)=>i).sort(()=>Math.random()-0.5);
     stepRef.current = 0;
     melodyRef.current = MELODIES[Math.floor(Math.random()*MELODIES.length)] || [440,494,523,587,659,698,784,880,988,1046,1174,1318,1396,1567,1760];
+    
     placeTiles(n);
 
-    // Crear zonas de drop para Mundo 2+ (arrastre)
+    // Crear zonas de drop si es necesario
     setTimeout(() => {
-      if (world >= 2) {
+      if (config.mechanics.includes('drag')) {
         const zones = createDropZones(seqRef.current);
         setDropZones(zones);
       } else {
@@ -554,7 +640,13 @@ function Game({ level, setLevel, soundOn, vibrateOn, onOpenAuth, onOpenRanking, 
       }
     }, 100);
 
-    const t=timeFor(lv); setTime(t); setRunning(true); runningRef.current=true; SFX.start(); startTimeRef.current=Date.now();
+    const t = config.time; 
+    setTime(t); 
+    setRunning(true); 
+    runningRef.current=true; 
+    SFX.start(); 
+    startTimeRef.current=Date.now();
+    
     const t0=Date.now();
     timerRef.current=setInterval(()=>{
       const el=(Date.now()-t0)/1000; const rem=Math.max(0,t-el);
@@ -570,7 +662,7 @@ function Game({ level, setLevel, soundOn, vibrateOn, onOpenAuth, onOpenRanking, 
             window.LUM_API && window.LUM_API.api('game.php?action=save_progress', {
               method: 'POST',
               body: JSON.stringify({
-                level,
+                level: lv,
                 total_time_s: spent,
                 success: 0
               })
@@ -878,7 +970,7 @@ export default function App(){
     <div className="shell">
       <div className="device">
         {screen==='intro' ? (
-          <Intro onPlay={()=>setScreen('game')} onAuth={()=>setShowAuth(true)} />
+          <Intro onPlay={(level)=>{setLevel(level); setScreen('game')}} onAuth={()=>setShowAuth(true)} currentLevel={level} setLevel={setLevel} />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} vibrateOn={vibrateOn}
                 onOpenAuth={()=>setShowAuth(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
