@@ -329,6 +329,60 @@ function useLumetrixStyles(){
       .neon-line.left{left:0;top:0;bottom:0;width:3px;background:#ff6b6b;color:#ff6b6b;animation-delay:3s;border-radius:0 3px 3px 0}
       @keyframes neonFlow{0%{opacity:0;transform:scaleX(0)}25%{opacity:1;transform:scaleX(1)}75%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(0)} }
       @keyframes logoGlow{0%{filter:drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)}50%{filter:drop-shadow(0 0 30px #ff00ff) drop-shadow(0 0 50px #39ff14) drop-shadow(0 0 80px #00ffff)}100%{filter:drop-shadow(0 0 25px #00ffff) drop-shadow(0 0 45px #ff00ff) drop-shadow(0 0 70px #39ff14)} }
+      
+      /* ---- Drag Nudge / Hints ---- */
+      @keyframes nudgeShake {
+        0% { transform: translate(0,0) rotate(0deg) }
+        20% { transform: translate(2px, -1px) rotate(-1.2deg) }
+        40% { transform: translate(-2px, 1px) rotate(1.2deg) }
+        60% { transform: translate(2px, 0px) rotate(-0.8deg) }
+        80% { transform: translate(-1px, 1px) rotate(0.8deg) }
+        100% { transform: translate(0,0) rotate(0deg) }
+      }
+      .tile.nudge-shake {
+        animation: nudgeShake .45s ease both;
+        filter: brightness(1.12);
+      }
+
+      @keyframes pulseRing {
+        0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.35), 0 0 18px currentColor; }
+        70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0),   0 0 18px currentColor; }
+        100% { box-shadow: 0 0 0 0 rgba(255,255,255,0),      0 0 18px currentColor; }
+      }
+      .drop-zone.pulse {
+        animation: pulseRing .9s ease-out 1;
+      }
+
+      .drag-hint {
+        position: absolute;
+        pointer-events: none;
+        z-index: 1000;
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #000;
+        background: #00fff0;
+        box-shadow: 0 0 12px #00fff077;
+        transform: translate(-50%, -140%);
+        opacity: 0;
+        transition: opacity .12s ease, transform .25s ease;
+      }
+      .drag-hint.show {
+        opacity: 1;
+        transform: translate(-50%, -160%);
+      }
+      .drag-hint::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -6px;
+        width: 0; height: 0;
+        transform: translateX(-50%);
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 6px solid #00fff0;
+      }
     `;
     document.head.appendChild(tag);
     return ()=>{ try{ document.head.removeChild(tag); }catch{} };
@@ -499,6 +553,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     SFX.fail();
     vibrate(80, vibrateOn);
     stepRef.current = 0;
+    
+    // si hay especial, asegúrate de devolverla a origen SIEMPRE
+    restoreSpecialTile('resetCurrentStep');
+    
     resetTiles();
     partiallyTouchedRef.current.clear(); // Reset fichas de doble toque
     setPartiallyTouched(new Set());
@@ -638,8 +696,151 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 
   const seqRef = useRef([]);
   const stepRef = useRef(0);
+  // Posiciones originales por id → para poder volver tras fallos posteriores
+  const origPosRef = useRef(new Map());
   const timerRef = useRef(null);
   const runningRef = useRef(false);
+
+  // Umbral para distinguir entre tap y drag real
+  const DRAG_MIN_PX = 8;
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const suppressClickRef = useRef(false);
+
+  // Paso actual espera ARRASTRE (drag)? Ignora todos los clics; sólo vale arrastrar.
+  const isCurrentStepDrag = (expectedId) => {
+    const cfg = getLevelConfig(level) || { mechanics: [] };
+    const mechanics = cfg.mechanics || [];
+    const currentWorld = Math.floor((level-1)/10) + 1;
+
+    // Combo (mundo 5): la ficha esperada es de arrastre si está en comboDragTiles
+    const isCombo = mechanics.includes('combo') ||
+      (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'));
+    if (isCombo) return comboDragTiles.has(expectedId);
+
+    // Mundos 2-3 (drag simple): la ficha esperada es arrastre si expected === specialId
+    if (currentWorld >= 2 && mechanics.includes('drag')) {
+      return specialIdRef.current === expectedId;
+    }
+    return false;
+  };
+
+  // Pequeño "nudge" cuando tocan la especial sin arrastrar
+  const nudgeSpecialTile = (reason = 'tap') => {
+    const board = boardRef.current;
+    if (!board || specialIdRef.current == null) return;
+
+    const el = board.querySelector(`.tile[data-id="${specialIdRef.current}"]`);
+    if (!el) return;
+
+    // 1) Wiggle en la ficha
+    el.classList.remove('nudge-shake');
+    // reflow para reiniciar anim
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+    el.classList.add('nudge-shake');
+    setTimeout(() => el.classList.remove('nudge-shake'), 550);
+
+    // 2) Pulso en la zona de drop (si existe)
+    setDrop(d => d ? ({ ...d, hint: true }) : d);
+    setTimeout(() => setDrop(d => d ? ({ ...d, hint: false }) : d), 900);
+
+    // 3) Globito "arrastra"
+    const rect = el.getBoundingClientRect();
+    const brect = board.getBoundingClientRect();
+    const hint = document.createElement('div');
+    hint.className = 'drag-hint';
+    hint.textContent = 'arrastra';
+    Object.assign(hint.style, {
+      left: `${rect.left - brect.left + rect.width/2}px`,
+      top: `${rect.top - brect.top}px`,
+    });
+    board.appendChild(hint);
+    requestAnimationFrame(() => hint.classList.add('show'));
+    setTimeout(() => {
+      hint.classList.remove('show');
+      setTimeout(() => { try { hint.remove(); } catch {} }, 180);
+    }, 800);
+
+    // Opcional: un "pip" suave y vibración mini
+    try { SFX.blink(720); } catch {}
+    vibrate(10, vibrateOn);
+  };
+
+  // Pequeño "nudge" cuando tocan una ficha de doble toque una sola vez
+  const nudgeDoubleTile = (tileId) => {
+    const board = boardRef.current;
+    if (!board) return;
+
+    const el = board.querySelector(`.tile[data-id="${tileId}"]`);
+    if (!el) return;
+
+    // 1) Wiggle en la ficha
+    el.classList.remove('nudge-shake');
+    // reflow para reiniciar anim
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+    el.classList.add('nudge-shake');
+    setTimeout(() => el.classList.remove('nudge-shake'), 550);
+
+    // 2) Globito "dos veces" o "doble click"
+    const rect = el.getBoundingClientRect();
+    const brect = board.getBoundingClientRect();
+    const hint = document.createElement('div');
+    hint.className = 'drag-hint';
+    hint.textContent = 'dos veces';
+    Object.assign(hint.style, {
+      left: `${rect.left - brect.left + rect.width/2}px`,
+      top: `${rect.top - brect.top}px`,
+    });
+    board.appendChild(hint);
+    requestAnimationFrame(() => hint.classList.add('show'));
+    setTimeout(() => {
+      hint.classList.remove('show');
+      setTimeout(() => { try { hint.remove(); } catch {} }, 180);
+    }, 800);
+
+    // Opcional: un "pip" suave y vibración mini
+    try { SFX.blink(720); } catch {}
+    vibrate(10, vibrateOn);
+  };
+
+  // Función centralizada para restaurar ficha especial
+  const restoreSpecialTile = (reason = 'unknown') => {
+    const board = boardRef.current;
+    const id = specialIdRef.current;
+    if (!board || id == null) return;
+
+    const el = board.querySelector(`.tile[data-id="${id}"]`);
+    if (!el) return;
+
+    // Usa el snapshot en ref o, si no existe, el de data-attrs (fallback)
+    let orig = originalPositionRef.current;
+    if (!orig && el.dataset.origX) {
+      orig = {
+        x: parseFloat(el.dataset.origX),
+        y: parseFloat(el.dataset.origY),
+        width: parseFloat(el.dataset.origW),
+        height: parseFloat(el.dataset.origH),
+      };
+    }
+    if (!orig) {
+      console.warn('restoreSpecialTile: no original position', { reason, id });
+      return;
+    }
+
+    el.style.position = 'absolute';
+    el.style.left = `${orig.x}px`;
+    el.style.top = `${orig.y}px`;
+    el.style.width = `${orig.width}px`;
+    el.style.height = `${orig.height}px`;
+    el.classList.remove('dragging');
+    el.style.zIndex = '';
+    el.style.pointerEvents = ''; // vuelve a ser clicable
+    setDraggingId(null);
+    draggingPointerIdRef.current = null;
+
+    console.log(`Ficha especial ${id} restaurada (${reason}) →`, orig);
+  };
 
   // Función para verificar si está dentro del área magnética
   const insideMagnetic = (cxViewport, cyViewport, dropZone, boardEl, MAGNET = 48) => {
@@ -802,32 +1003,42 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       const mechanics = config.mechanics;
       const currentWorld = Math.floor((level-1)/10) + 1;
       
+      // Configurar cursor por defecto
+      b.style.cursor = 'pointer';
+      
       // Marcar ficha especial para drag & drop
       if (currentWorld >= 2 && specialIdRef.current === i) {
-        b.style.cursor = 'grab';
-        b.addEventListener('pointerdown', (e) => onTilePointerDown(e, {id: i}));
+        // Agregar clase CSS para identificar ficha especial
+        b.classList.add('special-drag-tile');
+        
         b.addEventListener('dragstart', (e) => e.preventDefault());
-        b.addEventListener('touchstart', (e) => e.preventDefault(), {passive: false});
+        b.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+        // 👉 Listener directo: inicia drag SIEMPRE en la especial
+        b.addEventListener('pointerdown', (e) => {
+          onTilePointerDown(e, { id: i });
+        }, { passive: false });
         
         // Guardar posición original de la ficha especial
         setTimeout(() => {
           const rect = b.getBoundingClientRect();
           const boardRect = boardRef.current?.getBoundingClientRect();
           if (boardRect) {
-            originalPositionRef.current = {
+            const orig = {
               x: rect.left - boardRect.left,
               y: rect.top - boardRect.top,
               width: rect.width,
               height: rect.height
             };
-            console.log(`Posición original guardada:`, originalPositionRef.current);
+            originalPositionRef.current = orig;
+            b.dataset.origX = String(orig.x);
+            b.dataset.origY = String(orig.y);
+            b.dataset.origW = String(orig.width);
+            b.dataset.origH = String(orig.height);
+            console.log(`Posición original guardada:`, orig);
           }
         }, 50);
         
-        console.log(`Ficha especial ${i} configurada para arrastre`);
-      } else {
-        // Fichas normales - delegación
-        b.style.cursor = 'pointer';
+        console.log(`Ficha especial ${i} configurada para arrastre con clase 'special-drag-tile' (SIN event listener específico)`);
       }
       
       // Estilos según mecánica (Mundo 5 combo tiene prioridad)
@@ -844,7 +1055,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         } else if (comboDoubleTiles.has(i)) {
           // Ficha de doble toque en combo - DOS BORDES BLANCOS REALES
           b.style.setProperty('border', '2px solid white', 'important');
-          b.style.setProperty('box-shadow', '0 0 0 2px transparent, 0 0 0 4px white, 0 0 0 6px transparent, 0 0 0 8px white', 'important');
+          b.style.setProperty('outline', '2px solid white', 'important');
+          b.style.setProperty('outline-offset', '4px', 'important');
           console.log(`Ficha ${i} marcada como doble toque en COMBO - BORDE DOBLE APLICADO`);
         } else {
           // Ficha de toque normal en combo - sin borde especial
@@ -857,30 +1069,48 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         if (currentDoubleTiles.has(i)) {
           // Ficha de doble toque (Mundo 4) - DOS BORDES BLANCOS REALES
           b.style.setProperty('border', '2px solid white', 'important');
-          b.style.setProperty('box-shadow', '0 0 0 2px transparent, 0 0 0 4px white, 0 0 0 6px transparent, 0 0 0 8px white', 'important');
+          b.style.setProperty('outline', '2px solid white', 'important');
+          b.style.setProperty('outline-offset', '4px', 'important');
           console.log(`🚨 CACHE ROOTO - Ficha ${i} marcada como doble toque - BORDES BLANCOS APLICADOS`);
         }
+      }
+      
+      // Configurar cursor final para fichas especiales (después de toda la lógica de mecánicas)
+      if (currentWorld >= 2 && specialIdRef.current === i) {
+        b.style.cursor = 'grab';
+        console.log(`Cursor 'grab' aplicado a ficha especial ${i}`);
       }
       
       board.appendChild(b);
     }
 
     // Delegación única (funciona móvil/desktop, sin doble evento)
-    if(board.__lumDeleg){ board.removeEventListener('pointerdown', board.__lumDeleg); }
-    const deleg=(e)=>{
-      const el=e.target && e.target.closest && e.target.closest('.tile');
-      if(!el || !board.contains(el) || !runningRef.current) return;
+    if (board.__lumDeleg) { board.removeEventListener('pointerdown', board.__lumDeleg); }
+    const deleg = (e) => {
+      const el = e.target && e.target.closest && e.target.closest('.tile');
+      if (!el || !board.contains(el) || !runningRef.current) return;
+
+      const id = Number(el.dataset.id);
+      const expected = seqRef.current[stepRef.current];
+      const dragStep = isCurrentStepDrag(expected);
+
+      // Siempre: si tocan la especial, iniciamos drag (no validamos por click)
+      if (el.classList.contains('special-drag-tile') || id === specialIdRef.current) {
+        onTilePointerDown(e, { id });
+        return; // nunca tap() sobre la especial
+      }
+
+      // Si el paso actual espera drag, ignoramos todos los clics (no error)
+      if (dragStep) {
+        return; // ni sonido ni vibración, sólo silencio
+      }
+
+      // Paso normal → permitir tap
       e.preventDefault && e.preventDefault();
-      const id=Number(el.dataset.id);
-      
-      // Si es ficha especial, no usar delegación (ya tiene su propio handler)
-      const currentWorld = Math.floor((level-1)/10) + 1;
-      if (currentWorld >= 2 && specialIdRef.current === id) return;
-      
       tap(id);
     };
-    board.addEventListener('pointerdown', deleg, {passive:false});
-    board.__lumDeleg=deleg;
+    board.addEventListener('pointerdown', deleg, { passive: false });
+    board.__lumDeleg = deleg;
   }
 
   // Función para crear zona de drop para ficha especial
@@ -916,7 +1146,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     SFX.blink(parseFloat(el.dataset.pitch||'720')); 
     setTimeout(()=>{ 
       el.classList.remove('lit'); 
-      el.style.background=prev; 
+      // el.style.background=prev; // Comentado para que las fichas se queden marcadas
       // Restaurar estilos especiales si es ficha de doble toque
       if(doubleTouchTilesRef.current.has(id)){
         el.style.border = prevBorder; 
@@ -1035,36 +1265,81 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           } catch (_) {}
         }
         clearInterval(timerRef.current);
-        setRunning(false); runningRef.current=false; setLose(true); SFX.fail(); resetTiles();
+        setRunning(false); runningRef.current=false; 
+        restoreSpecialTile('timeout'); // por si estaba movida
+        setLose(true); SFX.fail(); resetTiles();
       }
     },100);
 
     setTimeout(hint, 1500);
   }
 
+  // Capturador global de click para anular clicks sintéticos tras drag
+  useEffect(() => {
+    const handleClickCapture = (e) => {
+      if (suppressClickRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClickRef.current = false;
+        console.log('Click sintético anulado tras drag');
+      }
+    };
+    
+    document.addEventListener('click', handleClickCapture, true);
+    return () => document.removeEventListener('click', handleClickCapture, true);
+  }, []);
+
+  // Exponer funciones de test para debugging
+  useEffect(() => {
+    window.LumetrixTest = Object.assign({}, window.LumetrixTest, {
+      start,
+      state: () => ({ level, world, levelInWorld, running, time, seqLen: (seqRef.current || []).length }),
+      tapExpected: () => { const id = seqRef.current[stepRef.current]; if (id != null) tap(id); },
+      tapId: (x) => tap(x),
+      isDragStep: () => { const exp = seqRef.current[stepRef.current]; return isCurrentStepDrag(exp); },
+      test: {
+        ignoreClicksOnDragStep: () => {
+          const exp = seqRef.current[stepRef.current];
+          const wasStep = stepRef.current;
+          if (!isCurrentStepDrag(exp)) return { ok: false, reason: 'not drag step' };
+          const wrong = (exp === 0 ? 1 : 0); // cualquier ficha que NO sea la esperada
+          tap(wrong);                       // debería ignorarse
+          return { ok: stepRef.current === wasStep, step: stepRef.current, expected: exp };
+        }
+      }
+    });
+  }, [level, world, levelInWorld, running, time]);
+
   // Función para manejar pointerdown en ficha
   const onTilePointerDown = (e, tile) => {
     if (!runningRef.current) return;
     const expected = seqRef.current[stepRef.current];
+    const board = boardRef.current;
+    const el = board?.querySelector(`.tile[data-id="${tile.id}"]`);
+    if (!el) return; // seguridad
 
     if (tile.id === specialIdRef.current) {
       console.log(`Ficha especial ${tile.id} tocada, esperada: ${expected}`);
-      // Ficha especial: SIEMPRE permitir arrastre, pero validar al soltar
-      console.log('Iniciando drag de ficha especial');
+      // Siempre drag, jamás validación por click
       e.preventDefault();
-      e.stopPropagation(); // Evitar que se propague a la delegación
-      const r = e.currentTarget.getBoundingClientRect();
+      e.stopPropagation();
+      const r = el.getBoundingClientRect();
+      
+      // Guardar posición inicial para detectar tap vs drag
+      dragStartRef.current = { x: r.left, y: r.top };
+      
+      // Activar supresión de click sintético
+      suppressClickRef.current = true;
+      
       setDraggingId(tile.id);
       draggingPointerIdRef.current = e.pointerId ?? null;
       dragOffsetRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
-      dragPosRef.current = { x: r.left, y: r.top }; // Mantener posición original inicialmente
-      const el = e.currentTarget;
-      // NO cambiar posición todavía - solo preparar para drag
+      dragPosRef.current = { x: r.left, y: r.top };
       el.style.zIndex = 1000;
       el.classList.add('dragging');
-      el.style.touchAction = 'none'; // Para móviles
+      el.style.pointerEvents = 'none';
+      el.style.touchAction = 'none';
       console.log('Drag iniciado correctamente - ficha en posición original');
-      // NO reproducir sonido aquí - solo cuando se complete el drag
       return;
     }
 
@@ -1076,14 +1351,27 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 
   function tap(id){
     if(!runningRef.current) return; 
+    
+    const config = getLevelConfig(level);
+    
+    // Ignorar taps sobre la especial cuando la mecánica es drag
+    if (config.mechanics.includes('drag') && id === specialIdRef.current) {
+      console.log('tap ignorado en especial (modo drag)');
+      return; // NUNCA validar por tap la especial
+    }
+    
     const expected=seqRef.current[stepRef.current];
     const board=boardRef.current;
+    
+    // Si este paso requiere ARRASTRE, ignoramos cualquier tap
+    if (isCurrentStepDrag(expected)) {
+      return; // sin fallo
+    }
     
     const el=board && board.querySelector(`.tile[data-id="${id}"]`); 
     if(!el) return;
     
-    const pitch = parseFloat(el.dataset.pitch||'880'); 
-    const config = getLevelConfig(level);
+    const pitch = parseFloat(el.dataset.pitch||'880');
     
     // Usar la referencia persistente de doubleTouchTiles
     const isDoubleTile = doubleTouchTilesRef.current.has(id);
@@ -1122,6 +1410,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           partiallyTouchedRef.current.add(id);
           console.log(`Actualizando partiallyTouched:`, Array.from(partiallyTouchedRef.current));
           setPartiallyTouched(new Set(partiallyTouchedRef.current));
+          
+          // Mostrar nudge para guiar al jugador
+          nudgeDoubleTile(id);
+          
           return; // No avanzar paso aún
         }
       } else {
@@ -1210,6 +1502,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       SFX.fail(); 
       vibrate(80, vibrateOn); 
       stepRef.current = 0; 
+      restoreSpecialTile('wrong-tap'); // ← clave cuando venías de un drag válido
       resetTiles();
       partiallyTouchedRef.current.clear();
       setPartiallyTouched(new Set());
@@ -1298,17 +1591,27 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         paintAndLock(draggingId);
         return advance();
       } else {
-        // FALLO: reposicionar ficha especial a su lugar original
-        if (draggingId === specialIdRef.current && el && originalPositionRef.current) {
-          console.log('Reposicionando ficha especial a su lugar original');
-          el.style.position = 'absolute';
-          el.style.left = `${originalPositionRef.current.x}px`;
-          el.style.top = `${originalPositionRef.current.y}px`;
-          el.style.width = `${originalPositionRef.current.width}px`;
-          el.style.height = `${originalPositionRef.current.height}px`;
-          el.style.zIndex = '';
-          el.style.pointerEvents = '';
-          el.classList.remove('dragging');
+        // Verificar si fue un tap (movimiento insuficiente) o drag real
+        if (draggingId === specialIdRef.current) {
+          const dist = Math.hypot(nx - dragStartRef.current.x, ny - dragStartRef.current.y);
+          
+          if (dist < DRAG_MIN_PX) {
+            // Fue un TAP: restaurar visual y SALIR sin fallar
+            console.log(`Tap detectado (distancia: ${dist.toFixed(1)}px < ${DRAG_MIN_PX}px) - ignorando`);
+            restoreSpecialTile('tap-detected');
+            setDraggingId(null);
+            draggingPointerIdRef.current = null;
+            setDrop(d => d ? ({...d, over: false}) : null);
+            
+            // Mostrar nudge para guiar al jugador
+            nudgeSpecialTile('tap');
+            
+            return; // No llamar a failStep()
+          } else {
+            // Fue un DRAG real pero falló: restaurar y fallar
+            console.log(`Drag real fallido (distancia: ${dist.toFixed(1)}px >= ${DRAG_MIN_PX}px)`);
+            restoreSpecialTile('drop-miss');
+          }
         }
         
         // limpiar estado drag
@@ -1393,8 +1696,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       <div className="hud">
         <div className="timebar"><i className="timefill" style={{ width: `${Math.max(0, Math.min(100, (time / timeFor(level)) * 100))}%` }} /></div>
         <div className="meta">
-          <span className="chip">W <b>{world}</b></span>
-          <span className="chip">N <b>{levelInWorld}</b></span>
+          <span className="chip">Nivel <b>{level}</b></span>
           <span className="chip">⏱ <b>{totalTime}s</b></span>
         </div>
       </div>
@@ -1402,7 +1704,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         {/* Zona de drop para ficha especial */}
         {drop && (
           <div
-            className={`drop-zone ${drop.over ? 'drag-over' : ''}`}
+            className={`drop-zone ${drop.over ? 'drag-over' : ''} ${drop.hint ? 'pulse' : ''}`}
             style={{
               position: 'absolute',
               left: drop.x,
