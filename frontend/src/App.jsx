@@ -1077,9 +1077,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         if (partiallyTouchedRef.current.has(id)) {
           // Segundo toque - completar doble toque
           console.log(`SEGUNDO TOQUE en ficha ${id} - completando doble toque`);
-          el.style.background = (paintRef.current || accent);
-          el.classList.remove('lit');
           el.style.opacity = '1';
+          blink(id); // Usar función blink para el efecto de brillo
           SFX.ok(pitch); 
           vibrate(20, vibrateOn);
           stepRef.current++;
@@ -1092,7 +1091,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           console.log(`PRIMER TOQUE en ficha ${id} - marcando como parcialmente tocada`);
           // NO cambiar el color, solo reducir opacidad para indicar que está parcialmente tocada
           el.style.opacity = '0.6';
-          el.classList.remove('lit');
+          blink(id); // Usar función blink para el efecto de brillo
           SFX.ok(pitch); 
           vibrate(20, vibrateOn);
           
@@ -1115,8 +1114,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       }
     } else if (id === expected) {
       // Toque normal en ficha correcta
-      el.style.background = (paintRef.current || accent);
-      el.classList.remove('lit');
+      blink(id); // Usar función blink para el efecto de brillo
       SFX.ok(pitch); 
       vibrate(20, vibrateOn);
       stepRef.current++;
