@@ -64,7 +64,7 @@ function getWorldMechanics(world) {
   if (!worldConfig) return { name: 'Desconocido', description: 'Mundo no definido' };
   
   const mechanics = worldConfig.mechanics;
-  if (mechanics.includes('combo')) {
+  if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
     return { name: 'Combinado', description: 'Todas las mecánicas' };
   } else if (mechanics.includes('double')) {
     return { name: 'Doble toque', description: 'Fichas con doble toque' };
@@ -488,7 +488,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const updateDropZones = () => {
     const currentWorld = Math.floor((level-1)/10) + 1;
     const config = getLevelConfig(level);
-    if ((currentWorld >= 2 || config.mechanics.includes('combo')) && running && seqRef.current.length > 0) {
+    if ((currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && running && seqRef.current.length > 0) {
       const zones = createDropZones(seqRef.current, level, dragTileId);
       setDropZones(zones);
     }
@@ -514,7 +514,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const mechanics = config.mechanics;
     const currentWorld = Math.floor((levelNum-1)/10) + 1;
     
-    if (mechanics.includes('combo')) {
+    if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
       // Mundo 5: Mecánica combo - mezcla todas las mecánicas
       const totalTiles = config.tiles;
       const dragCount = Math.max(1, Math.floor(totalTiles / 4)); // 25% arrastre
@@ -808,7 +808,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       }
       
       // Estilos según mecánica (Mundo 5 combo tiene prioridad)
-      if (mechanics.includes('combo')) {
+      if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
         if (comboDragTiles.has(i)) {
           // Ficha de arrastre en combo
           b.style.border = '3px solid #ff6b6b';
@@ -1069,7 +1069,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     
     // Usar la referencia persistente de doubleTouchTiles
     const isDoubleTile = doubleTouchTilesRef.current.has(id);
-    const isComboDouble = config.mechanics.includes('combo') && comboDoubleTiles.has(id);
+    const isComboDouble = (config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && comboDoubleTiles.has(id);
     
     console.log(`tap(${id}): doubleTouchTiles=`, Array.from(doubleTouchTilesRef.current), `isDoubleTile=${isDoubleTile}`);
     
@@ -1128,7 +1128,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       
       // Actualizar zona de drop para Mundo 2+ y combo
       const currentWorld = Math.floor((level-1)/10) + 1;
-      if ((currentWorld >= 2 || config.mechanics.includes('combo')) && stepRef.current < seqRef.current.length) {
+      if ((currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && stepRef.current < seqRef.current.length) {
         // Crear nueva zona de drop para la siguiente ficha especial
         setTimeout(() => {
           const currentWorld = Math.floor((level-1)/10) + 1;
@@ -1150,7 +1150,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             }
           }
         }, 100);
-      } else if (currentWorld >= 2 || config.mechanics.includes('combo')) {
+      } else if (currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) {
         setDrop(null); // No más zonas cuando se complete la secuencia
       }
       
