@@ -514,14 +514,11 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const mechanics = config.mechanics;
     const currentWorld = Math.floor((levelNum-1)/10) + 1;
     
-    console.log(`DEBUG setupLevelMechanics: Nivel ${levelNum}, mechanics=`, mechanics);
-    console.log(`DEBUG: includes('combo')=`, mechanics.includes('combo'));
-    console.log(`DEBUG: includes('touch')=`, mechanics.includes('touch'));
-    console.log(`DEBUG: includes('drag')=`, mechanics.includes('drag'));
-    console.log(`DEBUG: includes('double')=`, mechanics.includes('double'));
-    console.log(`DEBUG: es combo?`, mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double')));
+    console.log(`CACHE_ROTO_NUEVO_CODIGO_FUNCIONANDO_Nivel_${levelNum}_mechanics_`, mechanics);
     
-    if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
+    // SIMPLE: Si tiene drag Y double = COMBO
+    if (mechanics.includes('drag') && mechanics.includes('double')) {
+      console.log(`COMBO DETECTADO: drag + double`);
       // Mundo 5: Mecánica combo - mezcla todas las mecánicas
       const totalTiles = config.tiles;
       const dragCount = Math.max(1, Math.floor(totalTiles / 4)); // 25% arrastre
@@ -560,7 +557,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       console.log(`COMBO: doubleTiles=`, Array.from(doubleTiles));
       console.log(`COMBO: touchTiles=`, Array.from(new Set(shuffled.slice(dragCount + doubleCount))));
       
-    } else if (mechanics.includes('double')) {
+    } else if (mechanics.includes('double') && !(mechanics.includes('drag'))) {
       // Mundo 4: Solo doble toque - empezar con 1 ficha
       console.log(`DEBUG: Nivel ${levelNum} - detectado como doble toque. mechanics=`, mechanics);
       const numDoubleTiles = 1; // Siempre 1 ficha de doble toque para empezar
@@ -845,12 +842,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           b.addEventListener('dragstart', (e) => e.preventDefault());
           console.log(`Ficha ${i} marcada como ARRASTRE en COMBO`);
         } else if (comboDoubleTiles.has(i)) {
-          // Ficha de doble toque en combo - BORDE SÚPER VISIBLE PARA DEBUG
-          b.style.setProperty('border', '8px solid #FF00FF', 'important'); // Fucsia brillante
-          b.style.setProperty('box-shadow', '0 0 20px #FF00FF, 0 0 40px #FF00FF', 'important');
-          b.style.setProperty('outline', '4px solid #FFFFFF', 'important'); // Borde blanco adicional
-          b.style.setProperty('outline-offset', '2px', 'important');
-          console.log(`Ficha ${i} marcada como doble toque en COMBO - BORDE SÚPER VISIBLE APLICADO`);
+          // Ficha de doble toque en combo - DOS BORDES BLANCOS REALES
+          b.style.setProperty('border', '2px solid white', 'important');
+          b.style.setProperty('box-shadow', '0 0 0 2px transparent, 0 0 0 4px white, 0 0 0 6px transparent, 0 0 0 8px white', 'important');
+          console.log(`Ficha ${i} marcada como doble toque en COMBO - BORDE DOBLE APLICADO`);
         } else {
           // Ficha de toque normal en combo - sin borde especial
           b.style.border = '1px solid rgba(255,255,255,0.2)';
@@ -860,12 +855,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         // Mundos 1-4: mecánicas individuales
         console.log(`Procesando ficha ${i}, doubleTouchTiles:`, Array.from(currentDoubleTiles), `¿Tiene ${i}?`, currentDoubleTiles.has(i));
         if (currentDoubleTiles.has(i)) {
-          // Ficha de doble toque (Mundo 4) - BORDE SÚPER VISIBLE PARA DEBUG
-          b.style.setProperty('border', '8px solid #FF00FF', 'important'); // Fucsia brillante
-          b.style.setProperty('box-shadow', '0 0 20px #FF00FF, 0 0 40px #FF00FF', 'important');
-          b.style.setProperty('outline', '4px solid #FFFFFF', 'important'); // Borde blanco adicional
-          b.style.setProperty('outline-offset', '2px', 'important');
-          console.log(`Ficha ${i} marcada como doble toque - BORDE SÚPER VISIBLE APLICADO`);
+          // Ficha de doble toque (Mundo 4) - DOS BORDES BLANCOS REALES
+          b.style.setProperty('border', '2px solid white', 'important');
+          b.style.setProperty('box-shadow', '0 0 0 2px transparent, 0 0 0 4px white, 0 0 0 6px transparent, 0 0 0 8px white', 'important');
+          console.log(`🚨 CACHE ROOTO - Ficha ${i} marcada como doble toque - BORDES BLANCOS APLICADOS`);
         }
       }
       
