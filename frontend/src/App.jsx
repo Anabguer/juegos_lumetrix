@@ -537,6 +537,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       
     } else if (mechanics.includes('double')) {
       // Mundo 4: Solo doble toque - empezar con 1 ficha
+      console.log(`DEBUG: Nivel ${levelNum} - detectado como doble toque. mechanics=`, mechanics);
       const numDoubleTiles = 1; // Siempre 1 ficha de doble toque para empezar
       const doubleTiles = new Set();
       
