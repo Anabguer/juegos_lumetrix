@@ -114,21 +114,21 @@ const LEVEL_CONFIG = {
     },
     {
       id: 2,
-      mechanics: [["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"]],
+      mechanics: [["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"]],
       tiles: [4,4,5,5,6,6,7,8,8,9],
       time: [32,30,28,26,24,22,20,18,17,16],
       notes: "Mundo 2 — introduce y domina arrastre."
     },
     {
       id: 3,
-      mechanics: [["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"],["touch","drag"]],
+      mechanics: [["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"]],
       tiles: [5,5,6,6,7,7,8,8,9,9],
       time: [30,28,26,24,22,20,18,17,16,15],
       notes: "Mundo 3 — más fichas y menos tiempo."
     },
     {
       id: 4,
-      mechanics: [["double"],["double"],["touch","double"],["drag","double"],["touch","drag"],["double"],["touch","drag","double"],["drag","double"],["touch","double"],["touch","drag","double"]],
+      mechanics: [["double"],["double"],["double"],["drag","double"],["touch","drag"],["double"],["touch","drag","double"],["drag","double"],["touch","double"],["touch","drag","double"]],
       tiles: [5,5,6,6,7,7,8,8,9,9],
       time: [30,28,26,24,22,20,18,17,16,15],
       notes: "Mundo 4 — introduce doble toque y combina mecánicas."
@@ -532,6 +532,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       // Para compatibilidad con doble toque
       setDoubleTouchTiles(new Set(shuffled.slice(dragCount, dragCount + doubleCount)));
       setDragTileId(null); // No se usa en combo
+      setSpecialId(null); // Limpiar ficha especial
+      specialIdRef.current = null; // Limpiar referencia
       
     } else if (mechanics.includes('double')) {
       // Mundo 4: Solo doble toque - empezar con 1 ficha
@@ -551,6 +553,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       setComboDoubleTiles(new Set());
       setComboTouchTiles(new Set());
       setDragTileId(null); // No se usa en doble toque
+      setSpecialId(null); // Limpiar ficha especial
+      specialIdRef.current = null; // Limpiar referencia
       
     } else if (currentWorld >= 2 && mechanics.includes('drag')) {
       // Mundo 2-3: Seleccionar aleatoriamente UNA ficha para arrastre (nunca la primera)
