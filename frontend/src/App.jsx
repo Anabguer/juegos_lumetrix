@@ -100,6 +100,17 @@ const MELODIES = [
   [330,392,440,330,392,440,494,523,494,440,392,349], // Pirates (motivo)
   [392,392,392,392,392,392,392,494,330,349,392], // Jingle Bells
   [392,440,392,349,294,294,349,392,440,392,349,330], // Titanic (motivo)
+  // Más populares
+  [330,392,330,392,330,392,330,494,392,330,294], // Für Elise (Beethoven)
+  [392,523,494,440,392,523,494,440,392,659,587,523], // Pink Panther
+  [349,392,440,392,349,294,330,349,330,294], // Can't Help Falling in Love
+  [440,440,523,494,440,392,349,392,440], // Eye of the Tiger
+  [659,587,523,440,523,587,659,523,440,392], // Mission Impossible
+  [294,330,294,262,294,330,349,392,349,330,294], // Somewhere Over the Rainbow
+  [392,440,494,523,587,523,494,440,392], // Don't Stop Believin'
+  [523,494,440,523,494,440,523,587,659], // Sweet Child O' Mine (intro)
+  [262,294,330,262,262,294,330,262,330,349,392], // Frère Jacques
+  [440,494,523,587,523,494,440,392,440], // The Entertainer (ragtime)
 ];
 
 // ---------------- Configuración de Niveles ----------------
@@ -533,7 +544,7 @@ function Intro({ onPlay, onAuth }){
 }
 
 // ---------------- Game ----------------
-function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onTotalUpdate, totalTime: totalProp }){
+function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel }){
   const boardRef = useRef(null);
   const [time, setTime] = useState(timeFor(level));
   const [running, setRunning] = useState(false);
@@ -541,8 +552,65 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const [lose, setLose] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
-  const [totalPuntos, setTotalPuntos] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_puntos')||'0'))||0; }catch{return 0;} });
+  const [totalPuntos, setTotalPuntos] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialContent, setTutorialContent] = useState(null);
+  const levelWonRef = useRef(false); // Rastrea si ya ganamos este nivel
   useEffect(()=>{ if(typeof totalProp === 'number') setTotalTime(totalProp); }, [totalProp]);
+  useEffect(()=>{ if(typeof puntosProp === 'number') setTotalPuntos(puntosProp); }, [puntosProp]);
+
+  // Función para obtener el tutorial según el nivel
+  const getTutorial = (lvl) => {
+    const tutorialKey = `lum_tutorial_${lvl}`;
+    const seen = localStorage.getItem(tutorialKey);
+    if (seen) return null;
+    
+    switch(lvl) {
+      case 1:
+        return {
+          title: "¡Bienvenido a Lumetrix!",
+          steps: [
+            "Memoriza la secuencia de colores que aparece",
+            "Toca las fichas en el mismo orden",
+            "Completa antes de que se acabe el tiempo"
+          ],
+          icon: "★"
+        };
+      case 11:
+        return {
+          title: "Nueva mecánica: Arrastre",
+          steps: [
+            "Algunas fichas tienen un símbolo de arrastre ⇄",
+            "Arrastra estas fichas a la zona marcada",
+            "Las fichas normales se tocan como siempre"
+          ],
+          icon: "⇄"
+        };
+      case 31:
+        return {
+          title: "Nueva mecánica: Doble Toque",
+          steps: [
+            "Algunas fichas tienen dos círculos ⦿",
+            "Toca estas fichas DOS veces seguidas",
+            "Las demás fichas se tocan una sola vez"
+          ],
+          icon: "⦿"
+        };
+      case 40:
+        return {
+          title: "Nivel Combo",
+          steps: [
+            "Este nivel combina TODAS las mecánicas",
+            "Arrastra ⇄ las fichas de arrastre",
+            "Toca doble ⦿ las fichas marcadas",
+            "¡Concéntrate y buena suerte!"
+          ],
+          icon: "⚡"
+        };
+      default:
+        return null;
+    }
+  };
 
   // Función para calcular puntos
   const calculatePuntos = (level, timeRemaining, isFirstAttempt = true, hasErrors = false) => {
@@ -932,11 +1000,23 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         // Guardar progreso en API (nivel desbloqueado = actual + 1)
         try {
           if (window.LUM_API) {
-            const puntos = calculatePuntos(level, timeFor(level) - time);
+            const isPracticeMode = practiceModeLevel !== null;
+            const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+            const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
+            
+            if (!isPracticeMode && !isRetry) {
+              const nuevoTotalPuntos = totalPuntos + puntos;
+              setTotalPuntos(nuevoTotalPuntos);
+              if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+              // Actualizar currentLevel al avanzar
+              if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
+              levelWonRef.current = true; // Marcar que ya ganamos este nivel
+            }
+            
             window.LUM_API.api('game.php?action=save_progress', {
               method: 'POST',
               body: JSON.stringify({
-                level: level + 1,  // Próximo nivel desbloqueado
+                level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
                 total_time_s: spent,
                 puntos: puntos,
                 success: 1
@@ -1225,6 +1305,14 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     paintRef.current = colorForLevel(lv);
     if (root) root.style.setProperty('--accent', paintRef.current);
 
+    // Verificar si hay tutorial para este nivel
+    const tutorial = getTutorial(lv);
+    if (tutorial) {
+      setTutorialContent(tutorial);
+      setShowTutorial(true);
+      return; // No iniciar el nivel hasta que se cierre el tutorial
+    }
+
     setWin(false); setLose(false); setGameComplete(false); endedRef.current = false;
     if(timerRef.current) clearInterval(timerRef.current);
     const n=tilesFor(lv);
@@ -1505,11 +1593,23 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             // Al GANAR: guardar progreso en API (próximo nivel desbloqueado)
             try {
               if (window.LUM_API) {
-                const puntos = calculatePuntos(level, timeFor(level) - time);
+                const isPracticeMode = practiceModeLevel !== null;
+                const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+                const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
+                
+                if (!isPracticeMode && !isRetry) {
+                  const nuevoTotalPuntos = totalPuntos + puntos;
+                  setTotalPuntos(nuevoTotalPuntos);
+                  if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+                  // Actualizar currentLevel al avanzar
+                  if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
+                  levelWonRef.current = true; // Marcar que ya ganamos este nivel
+                }
+                
                 window.LUM_API.api('game.php?action=save_progress', {
                   method: 'POST',
                   body: JSON.stringify({
-                    level: level + 1,  // Próximo nivel desbloqueado
+                    level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
                     total_time_s: spent,
                     puntos: puntos,
                     success: 1
@@ -1547,6 +1647,11 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   function nextLevel(){
     setWin(false); setLose(false); setGameComplete(false);
     const nl = level + 1;
+    // Si el siguiente nivel es mayor que el nivel actual de progreso, salir del modo práctica
+    if (nl > currentLevel && typeof onExitPracticeMode === 'function') {
+      onExitPracticeMode();
+    }
+    levelWonRef.current = false; // Resetear flag al cambiar de nivel
     setLevel(nl);
     setTimeout(()=>start(nl), 0);
   }
@@ -1675,6 +1780,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           <span style={{display:'none',fontSize:'16px',fontWeight:'900',letterSpacing:'0.1em',color:'#fff'}}>LUMETRIX</span>
         </div>
         <div className="icons">
+          <button className="icon" onClick={onOpenLevelSelector} aria-label="Niveles" title="Selector de niveles">
+            <img src="lumetrix/img/ico_niveles.png?v=2" alt="Niveles" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'22px',fontWeight:'bold',color:'var(--accent)'}}>≡</span>
+          </button>
           <button className="icon" onClick={onOpenRanking} aria-label="Ranking">
             <img src="lumetrix/img/ico_ranking.png" alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>🏆</span>
@@ -1693,7 +1802,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         <div className="timebar"><i className="timefill" style={{ width: `${Math.max(0, Math.min(100, (time / timeFor(level)) * 100))}%` }} /></div>
         <div className="meta">
           <span className="chip">Nivel <b>{level}</b></span>
-          <span className="chip">🏆 <b>{totalPuntos} pts</b></span>
+          <span className="chip"><b>{totalPuntos}</b></span>
+          {practiceModeLevel !== null && (
+            <span className="chip" style={{background:'rgba(255,165,0,0.2)', border:'1px solid #ffa500', color:'#ffa500', fontSize:'11px'}}>PRÁCTICA</span>
+          )}
         </div>
       </div>
       <div className="board" ref={boardRef}>
@@ -1775,6 +1887,56 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                   Ranking
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {showTutorial && tutorialContent && (
+          <div className="overlay" style={{zIndex: 1000}}>
+            <div className="card" style={{textAlign:'center', maxWidth:'400px', padding:'28px'}}>
+              <div style={{fontSize:48, marginBottom:16}}>{tutorialContent.icon}</div>
+              <h3 style={{color:'var(--accent)', marginBottom:20, fontSize:'20px'}}>{tutorialContent.title}</h3>
+              <div style={{textAlign:'left', marginBottom:24}}>
+                {tutorialContent.steps.map((step, idx) => (
+                  <div key={idx} style={{
+                    display:'flex',
+                    alignItems:'flex-start',
+                    gap:'12px',
+                    marginBottom:'12px',
+                    fontSize:'14px',
+                    lineHeight:'1.5',
+                    color:'#ffffffdd'
+                  }}>
+                    <span style={{
+                      minWidth:'24px',
+                      height:'24px',
+                      borderRadius:'50%',
+                      background:'var(--accent)',
+                      color:'#000',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                      fontWeight:'bold',
+                      fontSize:'12px',
+                      marginTop:'2px'
+                    }}>
+                      {idx + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="btn btn1" 
+                onClick={() => {
+                  setShowTutorial(false);
+                  localStorage.setItem(`lum_tutorial_${level}`, '1');
+                  // Reiniciar el nivel después de cerrar el tutorial
+                  setTimeout(() => start(), 100);
+                }}
+                style={{width:'100%', padding:'14px', fontSize:'16px', fontWeight:'bold'}}
+              >
+                ¡Entendido!
+              </button>
             </div>
           </div>
         )}
@@ -2199,6 +2361,139 @@ function Auth({ onClose }){
   );
 }
 
+// ---------------- Selector de Niveles ----------------
+function LevelSelector({ onClose, currentLevel, onSelectLevel }) {
+  const worlds = [
+    { name: 'Mundo 1', color: '#39ff14', levels: [1,2,3,4,5,6,7,8,9,10] },
+    { name: 'Mundo 2', color: '#00ffff', levels: [11,12,13,14,15,16,17,18,19,20] },
+    { name: 'Mundo 3', color: '#ff6b9d', levels: [21,22,23,24,25,26,27,28,29,30] },
+    { name: 'Mundo 4', color: '#ffd700', levels: [31,32,33,34,35,36,37,38,39,40] },
+    { name: 'Mundo 5', color: '#ff00ff', levels: [41,42,43,44,45,46,47,48,49,50] }
+  ];
+
+  return (
+    <div className="modal">
+      <div className="card" style={{maxWidth:'90vw', width:'600px', maxHeight:'80vh', overflowY:'auto', padding:'20px'}}>
+        <button className="closer" onClick={onClose} aria-label="Cerrar">×</button>
+        <h3 style={{color:'var(--accent)', marginBottom:'12px', textAlign:'center'}}>Seleccionar Nivel</h3>
+        
+        <div style={{
+          marginBottom: '20px',
+          padding: '10px',
+          background: 'rgba(57,255,20,0.1)',
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#ffffffaa',
+          textAlign: 'center'
+        }}>
+          <strong style={{color: '#39ff14'}}>Modo Práctica:</strong> Los niveles ya completados no suman puntos
+        </div>
+        
+        <div style={{display:'flex', flexDirection:'column', gap:'24px'}}>
+          {worlds.map((world, worldIdx) => (
+            <div key={worldIdx}>
+              <h4 style={{
+                color: world.color,
+                fontSize: '16px',
+                marginBottom: '12px',
+                textShadow: `0 0 10px ${world.color}`,
+                fontWeight: 'bold'
+              }}>
+                {world.name}
+              </h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                gap: '10px'
+              }}>
+                {world.levels.map(lvl => {
+                  const isUnlocked = lvl <= currentLevel;
+                  const isCurrent = lvl === currentLevel;
+                  const isCompleted = lvl < currentLevel;
+                  
+                  return (
+                    <button
+                      key={lvl}
+                      disabled={!isUnlocked}
+                      onClick={() => {
+                        onSelectLevel(lvl);
+                        onClose();
+                      }}
+                      style={{
+                        position: 'relative',
+                        background: isUnlocked 
+                          ? (isCurrent ? `linear-gradient(135deg, ${world.color}22, ${world.color}11)` : 'rgba(255,255,255,0.05)')
+                          : 'rgba(0,0,0,0.3)',
+                        border: isCurrent 
+                          ? `2px solid ${world.color}` 
+                          : (isUnlocked ? '2px solid rgba(255,255,255,0.2)' : '2px solid rgba(255,255,255,0.1)'),
+                        borderRadius: '12px',
+                        padding: '16px 8px',
+                        color: isUnlocked ? '#fff' : '#666',
+                        cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                        transition: 'all 0.2s ease',
+                        opacity: isUnlocked ? 1 : 0.4,
+                        boxShadow: isCurrent ? `0 0 15px ${world.color}44` : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        minHeight: '70px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (isUnlocked) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = `0 4px 12px ${world.color}44`;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (isUnlocked) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = isCurrent ? `0 0 15px ${world.color}44` : 'none';
+                        }
+                      }}
+                    >
+                      {!isUnlocked && (
+                        <span style={{fontSize: '20px', opacity: 0.5}}>🔒</span>
+                      )}
+                      {isCompleted && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          fontSize: '12px',
+                          color: world.color
+                        }}>✓</span>
+                      )}
+                      <span style={{
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: isUnlocked ? world.color : '#666'
+                      }}>
+                        {lvl}
+                      </span>
+                      {isCurrent && (
+                        <span style={{
+                          fontSize: '10px',
+                          color: world.color,
+                          fontWeight: 'bold',
+                          marginTop: '2px'
+                        }}>
+                          ACTUAL
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------- App ----------------
 export default function App(){
   useLumetrixStyles();
@@ -2212,6 +2507,10 @@ export default function App(){
   const [vibrateOn, setVibrateOn] = useState(true);
   const [level, setLevel] = useState(1);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
+  const [totalPuntos, setTotalPuntos] = useState(0);
+  const [showLevelSelector, setShowLevelSelector] = useState(false);
+  const [currentLevel, setCurrentLevel] = useState(1); // Nivel actual de progreso
+  const [practiceModeLevel, setPracticeModeLevel] = useState(null); // Nivel en modo práctica
 
   // Cargar nivel guardado desde API al iniciar
   useEffect(() => {
@@ -2225,9 +2524,12 @@ export default function App(){
             if (progreso && progreso.success && progreso.data) {
               const savedLevel = progreso.data.nivel_actual || 1;
               const savedTime = progreso.data.total_time_s || 0;
+              const savedPuntos = progreso.data.total_puntos || 0;
               setLevel(savedLevel);
+              setCurrentLevel(savedLevel);
               setTotalTime(savedTime);
-              console.log(`Progreso cargado: Nivel ${savedLevel}, Tiempo ${savedTime}s`);
+              setTotalPuntos(savedPuntos);
+              console.log(`Progreso cargado: Nivel ${savedLevel}, Tiempo ${savedTime}s, Puntos ${savedPuntos}`);
             }
           }
         }
@@ -2256,10 +2558,24 @@ export default function App(){
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
                 onOpenAuth={()=>setShowAuth(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
-                onTotalUpdate={setTotalTime} totalTime={totalTime} />
+                onOpenLevelSelector={()=>setShowLevelSelector(true)}
+                onTotalUpdate={setTotalTime} totalTime={totalTime} onPuntosUpdate={setTotalPuntos} totalPuntos={totalPuntos}
+                practiceModeLevel={practiceModeLevel} currentLevel={currentLevel}
+                onExitPracticeMode={()=>setPracticeModeLevel(null)}
+                onUpdateCurrentLevel={setCurrentLevel} />
         )}
 
         {showRanking && <Ranking onClose={()=>setShowRanking(false)} total={totalTime} />}
+        {showLevelSelector && (
+          <LevelSelector 
+            onClose={()=>setShowLevelSelector(false)} 
+            currentLevel={currentLevel}
+            onSelectLevel={(lvl) => {
+              setPracticeModeLevel(lvl < currentLevel ? lvl : null);
+              setLevel(lvl);
+            }}
+          />
+        )}
         {showOptions && (
           <Options onClose={()=>setShowOptions(false)} onOpenAuth={()=>{ setShowOptions(false); setShowAuth(true); }}
                    level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} vibrateOn={vibrateOn} setSoundOn={setSoundOn} setMusicOn={setMusicOn} setVibrateOn={setVibrateOn}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lumetrix</string>
+    <string name="title_activity_main">Lumetrix</string>
+    <string name="package_name">com.colisan.lumetrix</string>
+    <string name="custom_url_scheme">com.colisan.lumetrix</string>
+</resources>

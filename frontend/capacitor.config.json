@@ -1,0 +1,8 @@
+{
+  "appId": "com.colisan.lumetrix",
+  "appName": "Lumetrix",
+  "webDir": "../PARA_HOSTALIA/sistema_apps_upload/lumetrix",
+  "server": {
+    "androidScheme": "https"
+  }
+}
