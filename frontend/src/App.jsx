@@ -2175,6 +2175,31 @@ export default function App(){
   const [level, setLevel] = useState(1);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
 
+  // Cargar nivel guardado desde API al iniciar
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        if (window.LUM_API && window.LUM_API.api) {
+          const result = await window.LUM_API.api('auth.php?action=check_session');
+          if (result && result.success) {
+            // Cargar progreso del usuario
+            const progreso = await window.LUM_API.api('game.php?action=get_progress');
+            if (progreso && progreso.success && progreso.data) {
+              const savedLevel = progreso.data.nivel_actual || 1;
+              const savedTime = progreso.data.total_time_s || 0;
+              setLevel(savedLevel);
+              setTotalTime(savedTime);
+              console.log(`Progreso cargado: Nivel ${savedLevel}, Tiempo ${savedTime}s`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Sin progreso guardado, empezando desde nivel 1');
+      }
+    };
+    loadProgress();
+  }, []);
+
   useEffect(()=>{ 
     window.LumetrixTest = Object.assign({}, window.LumetrixTest, { help:'LumetrixTest.start(), .tapExpected(), .state() — tras pulsar Jugar' }); 
   }, []);

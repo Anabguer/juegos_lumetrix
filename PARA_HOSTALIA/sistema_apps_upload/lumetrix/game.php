@@ -50,4 +50,30 @@ if ($act === 'save_progress') {
     }
 }
 
+if ($act === 'get_progress') {
+    $uakey = $_SESSION['uakey'];
+    $pdo = db();
+    
+    // Obtener progreso del usuario
+    $st = $pdo->prepare("
+        SELECT nivel_actual, total_time_s, updated_at
+        FROM lumetrix_progreso
+        WHERE usuario_aplicacion_key = ?
+    ");
+    $st->execute([$uakey]);
+    $data = $st->fetch(PDO::FETCH_ASSOC);
+    
+    if ($data) {
+        json_out(['success' => true, 'data' => $data]);
+    } else {
+        // Si no existe progreso, crear registro inicial
+        $pdo->prepare("
+            INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key, nivel_actual, total_time_s)
+            VALUES (?, 1, 0)
+        ")->execute([$uakey]);
+        
+        json_out(['success' => true, 'data' => ['nivel_actual' => 1, 'total_time_s' => 0]]);
+    }
+}
+
 json_out(['success' => false, 'message' => 'acción inválida']);
