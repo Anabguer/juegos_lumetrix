@@ -10,7 +10,7 @@ if ($act === 'global') {
                        WHERE ua.app_codigo = ?
                        ORDER BY p.nivel_actual DESC, p.total_time_s ASC
                        LIMIT 100");
-  $st->execute([APP_CODIGO]);
+  $st->execute(['lumetrix']);
   json_out(['success'=>true,'data'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
 }
 

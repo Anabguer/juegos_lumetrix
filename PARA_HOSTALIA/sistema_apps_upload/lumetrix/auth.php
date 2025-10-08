@@ -10,18 +10,18 @@ if ($act === 'register') {
   if (!$nick || !$email || !$pass) json_out(['success'=>false,'message'=>'faltan campos']);
 
   $pdo = db();
-  $uakey = key_from_email($email);
+  $uakey = uakey_from_email($email, 'lumetrix');
 
   // ya existe para esta app (por key o por nick+app)
   $st = $pdo->prepare('SELECT usuario_aplicacion_id FROM usuarios_aplicaciones WHERE (usuario_aplicacion_key=? OR (nick=? AND app_codigo=?)) LIMIT 1');
-  $st->execute([$uakey, $nick, APP_CODIGO]);
+  $st->execute([$uakey, $nick, 'lumetrix']);
   if ($st->fetch()) json_out(['success'=>false,'message'=>'usuario/email ya existen para esta app']);
 
   $now = date('Y-m-d H:i:s');
   $ins = $pdo->prepare('INSERT INTO usuarios_aplicaciones
     (usuario_aplicacion_key,email,nombre,nick,password_hash,app_codigo,fecha_registro,ultimo_acceso,activo,created_at)
     VALUES (?,?,?,?,?,?, ?, ?, 1, ?)');
-  $ins->execute([$uakey,$email,$nick,$nick,password_hash($pass,PASSWORD_BCRYPT),APP_CODIGO,$now,$now,$now]);
+  $ins->execute([$uakey,$email,$nick,$nick,password_hash($pass,PASSWORD_BCRYPT),'lumetrix',$now,$now,$now]);
 
   // upsert progreso (tabla del juego la crea Neni)
   $pdo->prepare('INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key) VALUES (?)')->execute([$uakey]);
@@ -38,17 +38,17 @@ if ($act === 'login') {
   $pdo = db();
 
   if (strpos($user, '@') !== false) {
-    $uakey = key_from_email($user);
+    $uakey = uakey_from_email($user, 'lumetrix');
     $st = $pdo->prepare('SELECT nick, email, password_hash FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND activo=1 LIMIT 1');
-    $st->execute([$uakey, APP_CODIGO]);
+    $st->execute([$uakey, 'lumetrix']);
   } else {
     $st = $pdo->prepare('SELECT usuario_aplicacion_key AS uakey, nick, email, password_hash FROM usuarios_aplicaciones WHERE nick=? AND app_codigo=? AND activo=1 LIMIT 1');
-    $st->execute([$user, APP_CODIGO]);
+    $st->execute([$user, 'lumetrix']);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) json_out(['success'=>false,'message'=>'usuario no encontrado']);
     $uakey = (string)$row['uakey'];
     $st = $pdo->prepare('SELECT nick, email, password_hash FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
-    $st->execute([$uakey, APP_CODIGO]);
+    $st->execute([$uakey, 'lumetrix']);
   }
 
   $row = $st->fetch(PDO::FETCH_ASSOC);
@@ -69,10 +69,10 @@ if ($act === 'check_session') {
   if (!uakey()) json_out(['success'=>false]);
   $pdo = db();
   $st = $pdo->prepare('SELECT nick, email FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=?');
-  $st->execute([uakey(), APP_CODIGO]);
+  $st->execute([uakey(), 'lumetrix']);
   $u = $st->fetch(PDO::FETCH_ASSOC);
   if (!$u) json_out(['success'=>false]);
-  json_out(['success'=>true,'user'=>['key'=>uakey()] + $u]);
+  json_out(['success'=>true,'uakey'=>uakey(),'user'=>['key'=>uakey()] + $u]);
 }
 
 json_out(['success'=>false,'message'=>'acción inválida']);
