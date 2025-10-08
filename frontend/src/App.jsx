@@ -1912,19 +1912,48 @@ function Ranking({ onClose, total }){
   );
 }
 function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibrateOn, setSoundOn, setMusicOn, setVibrateOn, onResetTotal, musicVolume, setMusicVolume }){
+  const [userInfo, setUserInfo] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        if (window.LUM_API && window.LUM_API.api) {
+          const result = await window.LUM_API.api('auth.php?action=check_session');
+          if (result && result.success) {
+            setIsLoggedIn(true);
+            setUserInfo(result.user);
+          }
+        }
+      } catch (e) {
+        setIsLoggedIn(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await window.LUM_API.api('auth.php?action=logout');
+      window.location.reload();
+    } catch (e) {
+      console.log('Error al cerrar sesión');
+    }
+  };
+
   return (
     <div className="modal"><div className="card" style={{border:'2px solid #39ff14',boxShadow:'0 0 20px #39ff1444'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #39ff14',boxShadow:'0 0 10px #39ff14',background:'#000'}}>✕</button>
-      <h3 style={{ color: '#39ff14', marginTop:0, textShadow:'0 0 10px #39ff14, 0 0 20px #39ff14', fontSize:'20px' }}>⚙️ CONFIGURACIÓN</h3>
+      <h3 style={{ color: '#39ff14', marginTop:0, textShadow:'0 0 10px #39ff14, 0 0 20px #39ff14', fontSize:'20px' }}>CONFIGURACIÓN</h3>
       <div className="list" style={{gap:'12px'}}>
         <label style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center',background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
-          <span style={{color:'#39ff14',fontWeight:'bold'}}>🎵 Música de fondo</span>
+          <span style={{color:'#39ff14',fontWeight:'bold'}}>Música de fondo</span>
           <input type="checkbox" checked={musicOn} onChange={e=>setMusicOn(e.target.checked)} style={{transform:'scale(1.2)',accentColor:'#39ff14'}} />
         </label>
         {musicOn && (
           <div style={{background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
             <div style={{color:'#39ff14',fontWeight:'bold',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
-              🔊 Volumen: {Math.round(musicVolume * 100)}%
+              Volumen: {Math.round(musicVolume * 100)}%
             </div>
             <input 
               type="range" 
@@ -1942,10 +1971,31 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
           </div>
         )}
         <label style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center',background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
-          <span style={{color:'#39ff14',fontWeight:'bold'}}>📳 Vibración</span>
+          <span style={{color:'#39ff14',fontWeight:'bold'}}>Vibración</span>
           <input type="checkbox" checked={vibrateOn} onChange={e=>setVibrateOn(e.target.checked)} style={{transform:'scale(1.2)',accentColor:'#39ff14'}} />
         </label>
-        <button className="btn" onClick={onOpenAuth} style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold'}}>👤 Identificarse</button>
+        
+        {isLoggedIn ? (
+          <div style={{background:'rgba(0,255,255,0.1)',border:'1px solid #00ffff33',borderRadius:'8px',padding:'12px'}}>
+            <div style={{fontSize:12,opacity:0.7,marginBottom:4}}>Sesión activa:</div>
+            <div style={{color:'#00ffff',fontWeight:'bold',marginBottom:8}}>{userInfo?.nick || userInfo?.email}</div>
+            <button 
+              className="btn" 
+              onClick={handleLogout}
+              style={{border:'2px solid #ff00ff',color:'#ff00ff',boxShadow:'0 0 10px #ff00ff44',fontWeight:'bold',width:'100%'}}
+            >
+              Cerrar sesión
+            </button>
+          </div>
+        ) : (
+          <button 
+            className="btn" 
+            onClick={onOpenAuth} 
+            style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold'}}
+          >
+            Entrar
+          </button>
+        )}
       </div>
     </div></div>
   );
