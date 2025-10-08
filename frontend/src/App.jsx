@@ -300,6 +300,8 @@ function useLumetrixStyles(){
       .timebar{flex:1;height:12px;border-radius:999px;border:1px solid var(--accent);box-shadow:0 0 6px #ffffff22, 0 0 12px var(--accent)}
       .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
       .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 105px);overflow:hidden}
+      .board::before{content:'';position:absolute;inset:-3px;border-radius:16px;background:conic-gradient(from 0deg at 50% 50%, transparent 0deg, var(--accent) 90deg, transparent 180deg);animation:rotateBorder 3s linear infinite;pointer-events:none;z-index:-1;opacity:0.6}
+      @keyframes rotateBorder{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
       .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .06s ease;cursor:pointer}
       .tile:active{transform:scale(.985)}
       .tile.dragging{transform:scale(1.1);z-index:100;box-shadow:0 0 20px rgba(255,255,255,0.5);cursor:grabbing}
@@ -1985,7 +1987,12 @@ function Auth({ onClose }){
             <div style={{background:'rgba(255,0,255,0.1)',border:'1px solid #ff00ff33',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
               <div style={{fontSize:12,opacity:0.6,marginBottom:4}}>Jugador</div>
               <div style={{fontSize:20,color:'#ff00ff',fontWeight:'bold',marginBottom:4}}>{userInfo?.nick || 'Usuario'}</div>
-              <div style={{fontSize:11,opacity:0.5}}>{userInfo?.email}</div>
+              <div style={{fontSize:11,opacity:0.5,marginBottom:8}}>{userInfo?.email}</div>
+              {userInfo?.fecha_registro && (
+                <div style={{fontSize:9,opacity:0.4}}>
+                  Desde {new Date(userInfo.fecha_registro).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}
+                </div>
+              )}
             </div>
             
             <button 

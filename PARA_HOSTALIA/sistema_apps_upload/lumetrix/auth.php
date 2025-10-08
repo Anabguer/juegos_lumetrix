@@ -39,15 +39,15 @@ if ($act === 'login') {
 
   if (strpos($user, '@') !== false) {
     $uakey = uakey_from_email($user, 'lumetrix');
-    $st = $pdo->prepare('SELECT nick, email, password_hash FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND activo=1 LIMIT 1');
+    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND activo=1 LIMIT 1');
     $st->execute([$uakey, 'lumetrix']);
   } else {
-    $st = $pdo->prepare('SELECT usuario_aplicacion_key AS uakey, nick, email, password_hash FROM usuarios_aplicaciones WHERE nick=? AND app_codigo=? AND activo=1 LIMIT 1');
+    $st = $pdo->prepare('SELECT usuario_aplicacion_key AS uakey, nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE nick=? AND app_codigo=? AND activo=1 LIMIT 1');
     $st->execute([$user, 'lumetrix']);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) json_out(['success'=>false,'message'=>'usuario no encontrado']);
     $uakey = (string)$row['uakey'];
-    $st = $pdo->prepare('SELECT nick, email, password_hash FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
+    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
     $st->execute([$uakey, 'lumetrix']);
   }
 
@@ -62,13 +62,13 @@ if ($act === 'login') {
   $pr->execute([$uakey]);
   $progreso = $pr->fetch(PDO::FETCH_ASSOC) ?: ['nivel_actual'=>1,'total_time_s'=>0];
 
-  json_out(['success'=>true,'user'=>['key'=>$uakey,'nick'=>$row['nick'],'email'=>$row['email']], 'progreso'=>$progreso]);
+  json_out(['success'=>true,'user'=>['key'=>$uakey,'nick'=>$row['nick'],'email'=>$row['email'],'fecha_registro'=>$row['fecha_registro']], 'progreso'=>$progreso]);
 }
 
 if ($act === 'check_session') {
   if (!uakey()) json_out(['success'=>false]);
   $pdo = db();
-  $st = $pdo->prepare('SELECT nick, email FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=?');
+  $st = $pdo->prepare('SELECT nick, email, fecha_registro FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=?');
   $st->execute([uakey(), 'lumetrix']);
   $u = $st->fetch(PDO::FETCH_ASSOC);
   if (!$u) json_out(['success'=>false]);
