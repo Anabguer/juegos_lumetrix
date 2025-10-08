@@ -493,22 +493,35 @@ function Intro({ onPlay, onAuth }){
           <div style={{textAlign:'center',fontSize:18,opacity:.9,marginTop:20,marginBottom:8,lineHeight:'1.4',fontWeight:500}}>Esto no es un Simón: es el <b>anti‑Simón</b>.<br/><br/><b>Encuentra</b> la secuencia y pinta <b>todas</b> las piezas del color del borde.</div>
           
           {isLoggedIn ? (
-            // Usuario logueado
+            // Usuario logueado - mostrar progreso guardado
             <div style={{textAlign:'center',marginTop:20}}>
-              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:12}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:4}}>¡Hola, {userInfo?.nick || 'Usuario'}! 👋</div>
+              <div style={{fontSize:13,opacity:0.6,marginBottom:16}}>Partida guardada</div>
               <div className="actions" style={{marginBottom:8}}>
-                <button className="btn btn1" onClick={onPlay}>🎮 Jugar</button>
+                <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
               </div>
-              <button className="btn btn2" onClick={handleLogout} style={{fontSize:12,padding:'8px 16px'}}>🚪 Cerrar sesión</button>
+              <button 
+                className="btn btn2" 
+                onClick={handleLogout} 
+                style={{fontSize:11,padding:'6px 12px',opacity:0.7}}
+              >
+                Salir
+              </button>
             </div>
           ) : (
-            // Usuario NO logueado
+            // Usuario NO logueado - opción invitado o entrar
             <div style={{textAlign:'center',marginTop:20}}>
-              <div className="actions" style={{marginBottom:12}}>
-                <button className="btn btn1" onClick={onPlay}>🎮 Jugar sin login</button>
+              <div className="actions" style={{marginBottom:16}}>
+                <button className="btn btn1" onClick={onPlay}>JUGAR</button>
               </div>
-              <div style={{fontSize:14,opacity:0.7,marginBottom:8}}>¿Quieres guardar tu progreso?</div>
-              <button className="btn btn2" onClick={onAuth}>📝 Registrarse / Iniciar sesión</button>
+              <div style={{fontSize:12,opacity:0.5,marginBottom:6}}>¿Ya tienes cuenta?</div>
+              <button 
+                className="btn btn2" 
+                onClick={onAuth}
+                style={{fontSize:12,padding:'6px 14px'}}
+              >
+                Entrar
+              </button>
             </div>
           )}
         </div>
@@ -2006,7 +2019,7 @@ function Auth({ onClose }){
             fontSize: '14px'
           }}
         >
-          🔑 Iniciar sesión
+          Entrar
         </button>
         <button 
           onClick={() => setMode('register')}
@@ -2020,12 +2033,12 @@ function Auth({ onClose }){
             fontSize: '14px'
           }}
         >
-          📝 Registrarse
+          Crear cuenta
         </button>
       </div>
 
       <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
-        {mode === 'login' ? '🔑 Iniciar Sesión' : '📝 Crear Cuenta'}
+        {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
       </h3>
       
       <div className="list" style={{gap:12}}>
@@ -2066,7 +2079,7 @@ function Auth({ onClose }){
             disabled={loading}
             style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
           >
-            {loading ? '⏳ Espera...' : (mode === 'login' ? '🔑 Entrar' : '✅ Registrarse')}
+            {loading ? '⏳ ...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
           </button>
           <button 
             className="btn" 
