@@ -607,11 +607,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const mechanics = config.mechanics;
     const currentWorld = Math.floor((levelNum-1)/10) + 1;
     
-    console.log(`CACHE_ROTO_NUEVO_CODIGO_FUNCIONANDO_Nivel_${levelNum}_mechanics_`, mechanics);
-    
     // SIMPLE: Si tiene drag Y double = COMBO
     if (mechanics.includes('drag') && mechanics.includes('double')) {
-      console.log(`COMBO DETECTADO: drag + double`);
       // Mundo 4-5: Mecánica combo - SIEMPRE 1 de cada tipo especial
       const totalTiles = config.tiles;
       const dragCount = 1;    // SIEMPRE 1 ficha de arrastre
@@ -646,13 +643,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         setDragTileId(null);
       }
       
-      console.log(`COMBO: dragTiles=`, Array.from(new Set(shuffled.slice(0, dragCount))));
-      console.log(`COMBO: doubleTiles=`, Array.from(doubleTiles));
-      console.log(`COMBO: touchTiles=`, Array.from(new Set(shuffled.slice(dragCount + doubleCount))));
-      
     } else if (mechanics.includes('double') && !(mechanics.includes('drag'))) {
       // Mundo 4: Solo doble toque - empezar con 1 ficha
-      console.log(`DEBUG: Nivel ${levelNum} - detectado como doble toque. mechanics=`, mechanics);
       const numDoubleTiles = 1; // Siempre 1 ficha de doble toque para empezar
       const doubleTiles = new Set();
       
@@ -661,8 +653,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         const randomIndex = Math.floor(Math.random() * config.tiles);
         doubleTiles.add(randomIndex);
       }
-      
-      console.log(`Mundo ${currentWorld}, Nivel ${levelNum}: Fichas de doble toque = [${Array.from(doubleTiles)}], Total fichas = ${config.tiles}`);
       doubleTouchTilesRef.current = doubleTiles;
       setDoubleTouchTiles(doubleTiles);
       setComboDragTiles(new Set());
@@ -678,7 +668,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       const availableTiles = Array.from({length: totalTiles - 1}, (_, i) => i + 1);
       const randomIndex = Math.floor(Math.random() * availableTiles.length);
       const specialTileId = availableTiles[randomIndex];
-      console.log(`Mundo ${currentWorld}, Nivel ${levelNum}: Ficha especial = ${specialTileId}, Total fichas = ${totalTiles}`);
       setSpecialId(specialTileId);
       specialIdRef.current = specialTileId;
       
@@ -874,7 +863,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     setDraggingId(null);
     draggingPointerIdRef.current = null;
 
-    console.log(`Ficha especial ${id} restaurada (${reason}) →`, orig);
   };
 
   // Función para verificar si está dentro del área magnética
@@ -962,7 +950,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         specialTile.style.zIndex = '';
         specialTile.style.pointerEvents = '';
         specialTile.classList.remove('dragging');
-        console.log(`Ficha especial ${specialIdRef.current} reposicionada a su lugar original:`, originalPositionRef.current);
       }
     }
   };
@@ -982,7 +969,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const isCombo = mechanics.includes('drag') && mechanics.includes('double');
     
     const currentDoubleTiles = doubleTilesOverride || (isCombo ? comboDoubleTiles : doubleTouchTilesRef.current);
-    console.log(`placeTiles llamado: n=${n}, currentSpecialId=${currentSpecialId}, doubleTouchTiles=`, Array.from(currentDoubleTiles));
     const board = boardRef.current; if(!board) return;
     board.querySelectorAll('.tile, .dropzone').forEach(e=>e.remove());
     const rect = board.getBoundingClientRect(); const W=rect.width, H=rect.height;
@@ -1074,11 +1060,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             b.dataset.origY = String(orig.y);
             b.dataset.origW = String(orig.width);
             b.dataset.origH = String(orig.height);
-            console.log(`Posición original guardada:`, orig);
           }
         }, 50);
-        
-        console.log(`Ficha especial ${i} configurada para arrastre con clase 'special-drag-tile' (SIN event listener específico)`);
       }
       
       // Estilos según mecánica (Mundo 5 combo tiene prioridad)
@@ -1091,13 +1074,11 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           b.style.cursor = 'grab';
           b.addEventListener('pointerdown', (e) => onTilePointerDown(e, i));
           b.addEventListener('dragstart', (e) => e.preventDefault());
-          console.log(`Ficha ${i} marcada como ARRASTRE en COMBO`);
         } else if (comboDoubleTiles.has(i)) {
           // Ficha de doble toque en combo - DOS BORDES BLANCOS REALES
           b.style.setProperty('border', '2px solid white', 'important');
           b.style.setProperty('outline', '2px solid white', 'important');
           b.style.setProperty('outline-offset', '4px', 'important');
-          console.log(`Ficha ${i} marcada como doble toque en COMBO - BORDE DOBLE APLICADO`);
         } else {
           // Ficha de toque normal en combo - sin borde especial
           b.style.border = '1px solid rgba(255,255,255,0.2)';
@@ -1105,20 +1086,17 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         }
       } else {
         // Mundos 1-4: mecánicas individuales
-        console.log(`Procesando ficha ${i}, doubleTouchTiles:`, Array.from(currentDoubleTiles), `¿Tiene ${i}?`, currentDoubleTiles.has(i));
         if (currentDoubleTiles.has(i)) {
           // Ficha de doble toque (Mundo 4) - DOS BORDES BLANCOS REALES
           b.style.setProperty('border', '2px solid white', 'important');
           b.style.setProperty('outline', '2px solid white', 'important');
           b.style.setProperty('outline-offset', '4px', 'important');
-          console.log(`🚨 CACHE ROOTO - Ficha ${i} marcada como doble toque - BORDES BLANCOS APLICADOS`);
         }
       }
       
       // Configurar cursor final para fichas especiales (después de toda la lógica de mecánicas)
       if (currentWorld >= 2 && specialIdRef.current === i) {
         b.style.cursor = 'grab';
-        console.log(`Cursor 'grab' aplicado a ficha especial ${i}`);
       }
       
       board.appendChild(b);
@@ -1226,7 +1204,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const firstTile = 0; // La primera ficha siempre es la 0 (nunca especial)
     const remainingTiles = allTiles.slice(1).sort(()=>Math.random()-0.5);
     seqRef.current = [firstTile, ...remainingTiles];
-    console.log(`Secuencia generada para nivel ${lv}:`, seqRef.current);
     stepRef.current = 0;
     melodyRef.current = MELODIES[Math.floor(Math.random()*MELODIES.length)] || [440,494,523,587,659,698,784,880,988,1046,1174,1318,1396,1567,1760];
     
@@ -1269,7 +1246,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               over: false
             };
             setDrop(dropZone);
-            console.log(`Zona de drop creada para ficha ${currentSpecialId}`);
           }
         }
       } else {
@@ -1321,7 +1297,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         e.preventDefault();
         e.stopPropagation();
         suppressClickRef.current = false;
-        console.log('Click sintético anulado tras drag');
       }
     };
     
@@ -1359,7 +1334,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     if (!el) return; // seguridad
 
     if (tile.id === specialIdRef.current) {
-      console.log(`Ficha especial ${tile.id} tocada, esperada: ${expected}`);
       // Siempre drag, jamás validación por click
       e.preventDefault();
       e.stopPropagation();
@@ -1379,7 +1353,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       el.classList.add('dragging');
       el.style.pointerEvents = 'none';
       el.style.touchAction = 'none';
-      console.log('Drag iniciado correctamente - ficha en posición original');
       return;
     }
 
@@ -1396,7 +1369,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     
     // Ignorar taps sobre la especial cuando la mecánica es drag
     if (config.mechanics.includes('drag') && id === specialIdRef.current) {
-      console.log('tap ignorado en especial (modo drag)');
       return; // NUNCA validar por tap la especial
     }
     
@@ -1417,17 +1389,12 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const isDoubleTile = doubleTouchTilesRef.current.has(id);
     const isComboDouble = (config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && comboDoubleTiles.has(id);
     
-    console.log(`tap(${id}): doubleTouchTiles=`, Array.from(doubleTouchTilesRef.current), `isDoubleTile=${isDoubleTile}`);
-    
     // Lógica de doble toque (Mundo 4+) y combo (Mundo 5)
-    console.log(`tap(${id}): isDoubleTile=${isDoubleTile}, config.mechanics=`, config.mechanics, `includes('double')=`, config.mechanics.includes('double'), `isComboDouble=${isComboDouble}`);
     if ((isDoubleTile && config.mechanics.includes('double')) || isComboDouble) {
       // Solo permitir tocar fichas de doble toque cuando sea su turno
       if (id === expected) {
-        console.log(`Ficha ${id} es de doble toque y es su turno. partiallyTouched:`, Array.from(partiallyTouchedRef.current), `¿Tiene ${id}?`, partiallyTouchedRef.current.has(id));
         if (partiallyTouchedRef.current.has(id)) {
           // Segundo toque - completar doble toque
-          console.log(`SEGUNDO TOQUE en ficha ${id} - completando doble toque`);
           el.style.opacity = '1';
           blink(id); // Usar función blink para el efecto de brillo
           SFX.ok(pitch); 
@@ -1439,7 +1406,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           setPartiallyTouched(new Set(partiallyTouchedRef.current));
         } else {
           // Primer toque - marcar como parcialmente tocada
-          console.log(`PRIMER TOQUE en ficha ${id} - marcando como parcialmente tocada`);
           // NO cambiar el color, solo reducir opacidad para indicar que está parcialmente tocada
           el.style.opacity = '0.6';
           blink(id); // Usar función blink para el efecto de brillo
@@ -1448,7 +1414,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           
           // Añadir a fichas parcialmente tocadas
           partiallyTouchedRef.current.add(id);
-          console.log(`Actualizando partiallyTouched:`, Array.from(partiallyTouchedRef.current));
           setPartiallyTouched(new Set(partiallyTouchedRef.current));
           
           // Mostrar nudge para guiar al jugador
@@ -1458,7 +1423,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         }
       } else {
         // Ficha de doble toque pero no es su turno - error
-        console.log(`Error: ficha de doble toque ${id} no es la esperada (${expected})`);
         SFX.fail(); 
         vibrate(80, vibrateOn); 
         stepRef.current = 0; 
@@ -1538,7 +1502,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         }
     } else {
       // Error - resetear todo incluyendo doble toque
-      console.log(`Error: ficha ${id} no es la esperada (${expected})`);
       SFX.fail(); 
       vibrate(80, vibrateOn); 
       stepRef.current = 0; 
@@ -1637,7 +1600,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           
           if (dist < DRAG_MIN_PX) {
             // Fue un TAP: restaurar visual y SALIR sin fallar
-            console.log(`Tap detectado (distancia: ${dist.toFixed(1)}px < ${DRAG_MIN_PX}px) - ignorando`);
             restoreSpecialTile('tap-detected');
             setDraggingId(null);
             draggingPointerIdRef.current = null;
@@ -1649,7 +1611,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             return; // No llamar a failStep()
           } else {
             // Fue un DRAG real pero falló: restaurar y fallar
-            console.log(`Drag real fallido (distancia: ${dist.toFixed(1)}px >= ${DRAG_MIN_PX}px)`);
             restoreSpecialTile('drop-miss');
           }
         }
@@ -1677,46 +1638,9 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   return (
     <section className="screen">
       <div className="topbar">
-        <div className="brand" style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+        <div className="brand">
           <img src="lumetrix/img/logo2.png" alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
           <span style={{display:'none',fontSize:'16px',fontWeight:'900',letterSpacing:'0.1em',color:'#fff'}}>LUMETRIX</span>
-          <select 
-            value={level} 
-            onChange={(e) => {
-              const newLevel = parseInt(e.target.value);
-              setLevel(newLevel);
-            }}
-            style={{
-              background: '#000',
-              color: '#fff',
-              border: '1px solid #00ff88',
-              borderRadius: '6px',
-              padding: '4px 8px',
-              fontSize: '12px',
-              outline: 'none',
-              minWidth: '80px'
-            }}
-          >
-            {Array.from({length: 50}, (_, i) => i + 1).map(n => (
-              <option key={n} value={n}>Nivel {n}</option>
-            ))}
-          </select>
-          <button 
-            onClick={() => start(level)}
-            style={{
-              background: '#00ff88',
-              color: '#000',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 12px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              marginLeft: '8px'
-            }}
-          >
-            IR
-          </button>
         </div>
         <div className="icons">
           <button className="icon" onClick={onOpenRanking} aria-label="Ranking">
