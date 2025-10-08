@@ -4,10 +4,11 @@ $act = $_GET['action'] ?? '';
 
 if ($act === 'register') {
   $in = json_decode(file_get_contents('php://input'), true) ?: [];
+  $nombre = trim($in['nombre'] ?? '');
   $nick  = trim($in['username'] ?? '');
   $email = trim($in['email'] ?? '');
   $pass  = $in['password'] ?? '';
-  if (!$nick || !$email || !$pass) json_out(['success'=>false,'message'=>'faltan campos']);
+  if (!$nombre || !$nick || !$email || !$pass) json_out(['success'=>false,'message'=>'faltan campos']);
 
   $pdo = db();
   $uakey = uakey_from_email($email, 'lumetrix');
@@ -21,7 +22,7 @@ if ($act === 'register') {
   $ins = $pdo->prepare('INSERT INTO usuarios_aplicaciones
     (usuario_aplicacion_key,email,nombre,nick,password_hash,app_codigo,fecha_registro,ultimo_acceso,activo,created_at)
     VALUES (?,?,?,?,?,?, ?, ?, 1, ?)');
-  $ins->execute([$uakey,$email,$nick,$nick,password_hash($pass,PASSWORD_BCRYPT),'lumetrix',$now,$now,$now]);
+  $ins->execute([$uakey,$email,$nombre,$nick,password_hash($pass,PASSWORD_BCRYPT),'lumetrix',$now,$now,$now]);
 
   // upsert progreso (tabla del juego la crea Neni)
   $pdo->prepare('INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key) VALUES (?)')->execute([$uakey]);

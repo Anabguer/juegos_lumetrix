@@ -1917,6 +1917,7 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
 function Auth({ onClose }){
   const [mode, setMode] = useState('login'); // 'login' o 'register'
   const [username, setUsername] = useState('');
+  const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -1954,7 +1955,7 @@ function Auth({ onClose }){
   };
 
   const handleRegister = async () => {
-    if (!username || !email || !password) {
+    if (!nombre || !username || !email || !password) {
       setMessage('❌ Rellena todos los campos');
       return;
     }
@@ -1965,7 +1966,7 @@ function Auth({ onClose }){
     try {
       const result = await window.LUM_API.api('auth.php?action=register', {
         method: 'POST',
-        body: JSON.stringify({ username, email, password })
+        body: JSON.stringify({ nombre, username, email, password })
       });
       
       if (result.success) {
@@ -2097,12 +2098,20 @@ function Auth({ onClose }){
       
       <div className="list" style={{gap:12}}>
         {mode === 'register' && (
-          <input 
-            placeholder="Nick" 
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
-          />
+          <>
+            <input 
+              placeholder="Nombre completo" 
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+            />
+            <input 
+              placeholder="Nick (nombre de usuario)" 
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+            />
+          </>
         )}
         <input 
           placeholder="Email" 
