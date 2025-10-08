@@ -4,6 +4,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:hostalia": "vite build && node scripts/postexport-fix.js",
+    "deploy:copy": "node scripts/deploy-copy.js",
+    "test:smoke": "node scripts/smoke-test.js",
     "preview": "vite preview"
   },
   "dependencies": {
