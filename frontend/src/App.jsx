@@ -1912,35 +1912,6 @@ function Ranking({ onClose, total }){
   );
 }
 function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibrateOn, setSoundOn, setMusicOn, setVibrateOn, onResetTotal, musicVolume, setMusicVolume }){
-  const [userInfo, setUserInfo] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        if (window.LUM_API && window.LUM_API.api) {
-          const result = await window.LUM_API.api('auth.php?action=check_session');
-          if (result && result.success) {
-            setIsLoggedIn(true);
-            setUserInfo(result.user);
-          }
-        }
-      } catch (e) {
-        setIsLoggedIn(false);
-      }
-    };
-    checkAuth();
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await window.LUM_API.api('auth.php?action=logout');
-      window.location.reload();
-    } catch (e) {
-      console.log('Error al cerrar sesión');
-    }
-  };
-
   return (
     <div className="modal"><div className="card" style={{border:'2px solid #39ff14',boxShadow:'0 0 20px #39ff1444'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #39ff14',boxShadow:'0 0 10px #39ff14',background:'#000'}}>✕</button>
@@ -1974,28 +1945,6 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
           <span style={{color:'#39ff14',fontWeight:'bold'}}>Vibración</span>
           <input type="checkbox" checked={vibrateOn} onChange={e=>setVibrateOn(e.target.checked)} style={{transform:'scale(1.2)',accentColor:'#39ff14'}} />
         </label>
-        
-        {isLoggedIn ? (
-          <div style={{background:'rgba(0,255,255,0.1)',border:'1px solid #00ffff33',borderRadius:'8px',padding:'12px'}}>
-            <div style={{fontSize:12,opacity:0.7,marginBottom:4}}>Sesión activa:</div>
-            <div style={{color:'#00ffff',fontWeight:'bold',marginBottom:8}}>{userInfo?.nick || userInfo?.email}</div>
-            <button 
-              className="btn" 
-              onClick={handleLogout}
-              style={{border:'2px solid #ff00ff',color:'#ff00ff',boxShadow:'0 0 10px #ff00ff44',fontWeight:'bold',width:'100%'}}
-            >
-              Cerrar sesión
-            </button>
-          </div>
-        ) : (
-          <button 
-            className="btn" 
-            onClick={onOpenAuth} 
-            style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold'}}
-          >
-            Entrar
-          </button>
-        )}
       </div>
     </div></div>
   );
@@ -2007,6 +1956,37 @@ function Auth({ onClose }){
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+
+  // Verificar sesión al abrir modal
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        if (window.LUM_API && window.LUM_API.api) {
+          const result = await window.LUM_API.api('auth.php?action=check_session');
+          if (result && result.success) {
+            setIsLoggedIn(true);
+            setUserInfo(result.user);
+          }
+        }
+      } catch (e) {
+        setIsLoggedIn(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogout = async () => {
+    setLoading(true);
+    try {
+      await window.LUM_API.api('auth.php?action=logout');
+      window.location.reload();
+    } catch (e) {
+      setMessage('❌ Error al cerrar sesión');
+      setLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!username || !email || !password) {
@@ -2071,41 +2051,67 @@ function Auth({ onClose }){
     <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #ff00ff',boxShadow:'0 0 10px #ff00ff',background:'#000'}}>✕</button>
       
-      {/* Tabs */}
-      <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
-        <button 
-          onClick={() => setMode('login')}
-          style={{
-            background: mode === 'login' ? 'rgba(255,0,255,0.2)' : 'transparent',
-            border: 'none',
-            color: mode === 'login' ? '#ff00ff' : '#ffffff66',
-            padding: '8px 16px',
-            cursor: 'pointer',
-            fontWeight: mode === 'login' ? 'bold' : 'normal',
-            fontSize: '14px'
-          }}
-        >
-          Entrar
-        </button>
-        <button 
-          onClick={() => setMode('register')}
-          style={{
-            background: mode === 'register' ? 'rgba(255,0,255,0.2)' : 'transparent',
-            border: 'none',
-            color: mode === 'register' ? '#ff00ff' : '#ffffff66',
-            padding: '8px 16px',
-            cursor: 'pointer',
-            fontWeight: mode === 'register' ? 'bold' : 'normal',
-            fontSize: '14px'
-          }}
-        >
-          Crear cuenta
-        </button>
-      </div>
+      {isLoggedIn ? (
+        // Usuario ya logueado - mostrar info y logout
+        <>
+          <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
+            Mi cuenta
+          </h3>
+          <div className="list" style={{gap:12}}>
+            <div style={{background:'rgba(255,0,255,0.1)',border:'1px solid #ff00ff33',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
+              <div style={{fontSize:12,opacity:0.6,marginBottom:4}}>Jugador</div>
+              <div style={{fontSize:20,color:'#ff00ff',fontWeight:'bold',marginBottom:4}}>{userInfo?.nick || 'Usuario'}</div>
+              <div style={{fontSize:11,opacity:0.5}}>{userInfo?.email}</div>
+            </div>
+            
+            <button 
+              className="btn" 
+              onClick={handleLogout}
+              disabled={loading}
+              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold',width:'100%',opacity:loading?0.5:1}}
+            >
+              {loading ? 'Cerrando...' : 'Cerrar sesión'}
+            </button>
+          </div>
+        </>
+      ) : (
+        // Usuario NO logueado - mostrar login/registro
+        <>
+          {/* Tabs */}
+          <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
+            <button 
+              onClick={() => setMode('login')}
+              style={{
+                background: mode === 'login' ? 'rgba(255,0,255,0.2)' : 'transparent',
+                border: 'none',
+                color: mode === 'login' ? '#ff00ff' : '#ffffff66',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontWeight: mode === 'login' ? 'bold' : 'normal',
+                fontSize: '14px'
+              }}
+            >
+              Entrar
+            </button>
+            <button 
+              onClick={() => setMode('register')}
+              style={{
+                background: mode === 'register' ? 'rgba(255,0,255,0.2)' : 'transparent',
+                border: 'none',
+                color: mode === 'register' ? '#ff00ff' : '#ffffff66',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontWeight: mode === 'register' ? 'bold' : 'normal',
+                fontSize: '14px'
+              }}
+            >
+              Crear cuenta
+            </button>
+          </div>
 
-      <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
-        {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
-      </h3>
+          <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
+            {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
+          </h3>
       
       <div className="list" style={{gap:12}}>
         {mode === 'register' && (
@@ -2157,6 +2163,8 @@ function Auth({ onClose }){
           </button>
         </div>
       </div>
+        </>
+      )}
     </div></div>
   );
 }
