@@ -1750,16 +1750,26 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 function Ranking({ onClose, total }){
   const [rankingData, setRankingData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserEmail, setCurrentUserEmail] = useState(null);
+  const myPositionRef = useRef(null);
 
   useEffect(() => {
     const loadRanking = async () => {
       try {
         if (window.LUM_API && window.LUM_API.api) {
+          // Obtener usuario actual
+          const sessionResult = await window.LUM_API.api('auth.php?action=check_session');
+          if (sessionResult && sessionResult.success) {
+            setCurrentUserEmail(sessionResult.user.email);
+          }
+
+          // Obtener ranking
           const result = await window.LUM_API.api('ranking.php?action=global');
           if (result && result.success && result.data) {
             setRankingData(result.data.map((player, index) => ({
               rank: index + 1,
               name: player.nick,
+              email: player.email,
               level: player.level,
               time: player.total_time_s,
               world: Math.floor((player.level - 1) / 10) + 1
@@ -1767,7 +1777,6 @@ function Ranking({ onClose, total }){
           }
         }
       } catch (e) {
-        console.log('Error cargando ranking:', e);
         setRankingData([]);
       } finally {
         setLoading(false);
@@ -1775,6 +1784,15 @@ function Ranking({ onClose, total }){
     };
     loadRanking();
   }, []);
+
+  // Scroll automático a la posición del usuario
+  useEffect(() => {
+    if (!loading && myPositionRef.current) {
+      setTimeout(() => {
+        myPositionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [loading, rankingData]);
 
   const getRankColor = (rank) => {
     if (rank === 1) return '#FFD700'; // Oro
@@ -1802,18 +1820,39 @@ function Ranking({ onClose, total }){
           <div style={{fontSize:12}}>¡Sé el primero en aparecer aquí!</div>
         </div>
       ) : (
-        <div className="list" style={{gap:'8px',maxHeight:'300px',overflowY:'auto'}}>
+        <div className="list" style={{gap:'8px',maxHeight:'300px',overflowY:'auto',paddingRight:'4px'}}>
           {rankingData.map(player => {
+            const isCurrentUser = currentUserEmail && player.email === currentUserEmail;
             return (
-              <div key={player.rank} style={{
-                background: 'rgba(0,255,255,0.1)',
-                border: '1px solid #00ffff33',
-                borderRadius:'8px',
-                padding:'10px',
-                display:'flex',
-                justifyContent:'space-between',
-                alignItems:'center'
-              }}>
+              <div 
+                key={player.rank} 
+                ref={isCurrentUser ? myPositionRef : null}
+                style={{
+                  background: isCurrentUser ? 'rgba(255,215,0,0.15)' : 'rgba(0,255,255,0.1)',
+                  border: isCurrentUser ? '2px solid #FFD700' : '1px solid #00ffff33',
+                  borderRadius:'8px',
+                  padding:'10px',
+                  display:'flex',
+                  justifyContent:'space-between',
+                  alignItems:'center',
+                  position: 'relative',
+                  boxShadow: isCurrentUser ? '0 0 12px rgba(255,215,0,0.3)' : 'none'
+                }}>
+                {isCurrentUser && (
+                  <div style={{
+                    position:'absolute',
+                    right:'8px',
+                    top:'-8px',
+                    background:'#FFD700',
+                    color:'#000',
+                    fontSize:'9px',
+                    fontWeight:'bold',
+                    padding:'2px 6px',
+                    borderRadius:'10px'
+                  }}>
+                    TÚ
+                  </div>
+                )}
                 <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                   <span style={{
                     color: getRankColor(player.rank), 
@@ -1823,11 +1862,11 @@ function Ranking({ onClose, total }){
                   }}>
                     #{getRankIcon(player.rank)}
                   </span>
-                  <span style={{color: '#fff', fontSize:'12px'}}>{player.name}</span>
+                  <span style={{color: isCurrentUser ? '#FFD700' : '#fff', fontSize:'12px', fontWeight: isCurrentUser ? 'bold' : 'normal'}}>{player.name}</span>
                 </div>
                 <div style={{textAlign:'right', fontSize:'11px', opacity:0.8}}>
                   <div>Mundo {player.world} • Nivel {player.level}</div>
-                  <div style={{color:'#00ffff'}}>{Math.round(player.time)}s</div>
+                  <div style={{color: isCurrentUser ? '#FFD700' : '#00ffff'}}>{Math.round(player.time)}s</div>
                 </div>
               </div>
             );

@@ -4,7 +4,7 @@ $act = $_GET['action'] ?? '';
 
 if ($act === 'global') {
   $pdo = db();
-  $st = $pdo->prepare("SELECT ua.nick AS nick, p.nivel_actual AS level, p.total_time_s
+  $st = $pdo->prepare("SELECT ua.nick AS nick, ua.email AS email, p.nivel_actual AS level, p.total_time_s
                        FROM lumetrix_progreso p
                        JOIN usuarios_aplicaciones ua ON ua.usuario_aplicacion_key = p.usuario_aplicacion_key
                        WHERE ua.app_codigo = ?
