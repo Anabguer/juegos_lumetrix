@@ -914,13 +914,13 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         const spent = Math.ceil((Date.now() - startTimeRef.current) / 1000);
         saveTotal(spent);
         
-        // Guardar progreso en API
+        // Guardar progreso en API (nivel desbloqueado = actual + 1)
         try {
           if (window.LUM_API) {
             window.LUM_API.api('game.php?action=save_progress', {
               method: 'POST',
               body: JSON.stringify({
-                level,
+                level: level + 1,  // Próximo nivel desbloqueado
                 total_time_s: spent,
                 success: 1
               })
@@ -1508,13 +1508,13 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
             saveTotal(spent);
             
-            // Al GANAR: guardar progreso en API (solo si hay sesión)
+            // Al GANAR: guardar progreso en API (próximo nivel desbloqueado)
             try {
               if (window.LUM_API) {
                 window.LUM_API.api('game.php?action=save_progress', {
                   method: 'POST',
                   body: JSON.stringify({
-                    level,            // nivel actual
+                    level: level + 1,  // Próximo nivel desbloqueado
                     total_time_s: spent,
                     success: 1
                   })

@@ -6320,7 +6320,8 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
           window.LUM_API && window.LUM_API.api("game.php?action=save_progress", {
             method: "POST",
             body: JSON.stringify({
-              level: e,
+              level: e + 1,
+              // Próximo nivel desbloqueado
               total_time_s: v,
               success: 1
             })
@@ -6610,8 +6611,8 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
             window.LUM_API && window.LUM_API.api("game.php?action=save_progress", {
               method: "POST",
               body: JSON.stringify({
-                level: e,
-                // nivel actual
+                level: e + 1,
+                // Próximo nivel desbloqueado
                 total_time_s: fe,
                 success: 1
               })
