@@ -6211,7 +6211,7 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
     const w = xt(v), _ = w.mechanics, I = Math.floor((v - 1) / 10) + 1;
     if (console.log(`CACHE_ROTO_NUEVO_CODIGO_FUNCIONANDO_Nivel_${v}_mechanics_`, _), _.includes("drag") && _.includes("double")) {
       console.log("COMBO DETECTADO: drag + double");
-      const P = w.tiles, M = Math.max(1, Math.floor(P / 4)), D = Math.max(1, Math.floor(P / 4)), ce = [...Array.from({ length: P }, (de, Ke) => Ke)].sort(() => Math.random() - 0.5), fe = new Set(ce.slice(0, M)), ge = new Set(ce.slice(M, M + D)), oe = new Set(ce.slice(M + D));
+      const P = w.tiles, M = 1, D = 1, ce = [...Array.from({ length: P }, (de, Ke) => Ke)].sort(() => Math.random() - 0.5), fe = new Set(ce.slice(0, M)), ge = new Set(ce.slice(M, M + D)), oe = new Set(ce.slice(M + D));
       if (Yr(fe), Gr(ge), Jr(oe), mt(ge), gt.current = ge, fe.size > 0) {
         const de = Array.from(fe)[0];
         $(de), Q.current = de, ko(de);

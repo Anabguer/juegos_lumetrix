@@ -612,11 +612,11 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     // SIMPLE: Si tiene drag Y double = COMBO
     if (mechanics.includes('drag') && mechanics.includes('double')) {
       console.log(`COMBO DETECTADO: drag + double`);
-      // Mundo 5: Mecánica combo - mezcla todas las mecánicas
+      // Mundo 4-5: Mecánica combo - SIEMPRE 1 de cada tipo especial
       const totalTiles = config.tiles;
-      const dragCount = Math.max(1, Math.floor(totalTiles / 4)); // 25% arrastre
-      const doubleCount = Math.max(1, Math.floor(totalTiles / 4)); // 25% doble toque
-      const touchCount = totalTiles - dragCount - doubleCount; // 50% toque normal
+      const dragCount = 1;    // SIEMPRE 1 ficha de arrastre
+      const doubleCount = 1;  // SIEMPRE 1 ficha de doble toque
+      const touchCount = totalTiles - dragCount - doubleCount; // Resto toque normal
       
       // Crear sets para cada tipo
       const allIndices = Array.from({length: totalTiles}, (_, i) => i);
