@@ -495,7 +495,7 @@ function Intro({ onPlay, onAuth }){
           {isLoggedIn ? (
             // Usuario logueado - mostrar progreso guardado
             <div style={{textAlign:'center',marginTop:20}}>
-              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:4}}>¡Hola, {userInfo?.nick || 'Usuario'}! 👋</div>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:4}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
               <div style={{fontSize:13,opacity:0.6,marginBottom:16}}>Partida guardada</div>
               <div className="actions" style={{marginBottom:8}}>
                 <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
@@ -2044,21 +2044,21 @@ function Auth({ onClose }){
       <div className="list" style={{gap:12}}>
         {mode === 'register' && (
           <input 
-            placeholder="🎮 Nick" 
+            placeholder="Nick" 
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
           />
         )}
         <input 
-          placeholder="📧 Email" 
+          placeholder="Email" 
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
         />
         <input 
-          placeholder="🔒 Contraseña" 
+          placeholder="Contraseña" 
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -2079,7 +2079,7 @@ function Auth({ onClose }){
             disabled={loading}
             style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
           >
-            {loading ? '⏳ ...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
+            {loading ? 'Cargando...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
           </button>
           <button 
             className="btn" 
@@ -2087,7 +2087,7 @@ function Auth({ onClose }){
             disabled={loading}
             style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1}}
           >
-            ❌ Cancelar
+            Cancelar
           </button>
         </div>
       </div>

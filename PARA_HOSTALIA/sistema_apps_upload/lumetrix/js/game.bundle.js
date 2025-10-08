@@ -6150,7 +6150,7 @@ function o0({ onPlay: e, onAuth: t }) {
           /* @__PURE__ */ g.jsxs("div", { style: { fontSize: 18, opacity: 0.9, color: "#39ff14", fontWeight: 700, marginBottom: 4 }, children: [
             "¡Hola, ",
             (i == null ? void 0 : i.nick) || "Usuario",
-            "! 👋"
+            "!"
           ] }),
           /* @__PURE__ */ g.jsx("div", { style: { fontSize: 13, opacity: 0.6, marginBottom: 16 }, children: "Partida guardada" }),
           /* @__PURE__ */ g.jsx("div", { className: "actions", style: { marginBottom: 8 }, children: /* @__PURE__ */ g.jsx("button", { className: "btn btn1", onClick: e, children: "CONTINUAR" }) }),
@@ -7009,7 +7009,7 @@ function a0({ onClose: e }) {
       t === "register" && /* @__PURE__ */ g.jsx(
         "input",
         {
-          placeholder: "🎮 Nick",
+          placeholder: "Nick",
           value: r,
           onChange: (y) => l(y.target.value),
           style: { background: "rgba(255,0,255,0.1)", border: "2px solid #ff00ff33", borderRadius: 10, padding: 12, color: "#fff", boxShadow: "0 0 10px #ff00ff22", outline: "none" }
@@ -7018,7 +7018,7 @@ function a0({ onClose: e }) {
       /* @__PURE__ */ g.jsx(
         "input",
         {
-          placeholder: "📧 Email",
+          placeholder: "Email",
           type: "email",
           value: o,
           onChange: (y) => i(y.target.value),
@@ -7028,7 +7028,7 @@ function a0({ onClose: e }) {
       /* @__PURE__ */ g.jsx(
         "input",
         {
-          placeholder: "🔒 Contraseña",
+          placeholder: "Contraseña",
           type: "password",
           value: u,
           onChange: (y) => s(y.target.value),
@@ -7045,7 +7045,7 @@ function a0({ onClose: e }) {
             onClick: t === "login" ? E : S,
             disabled: p,
             style: { border: "2px solid #39ff14", color: "#39ff14", boxShadow: "0 0 10px #39ff1444", fontWeight: "bold", opacity: p ? 0.5 : 1 },
-            children: p ? "⏳ ..." : t === "login" ? "Entrar" : "Crear cuenta"
+            children: p ? "Cargando..." : t === "login" ? "Entrar" : "Crear cuenta"
           }
         ),
         /* @__PURE__ */ g.jsx(
@@ -7055,7 +7055,7 @@ function a0({ onClose: e }) {
             onClick: e,
             disabled: p,
             style: { border: "2px solid #00ffff", color: "#00ffff", boxShadow: "0 0 10px #00ffff44", fontWeight: "bold", opacity: p ? 0.5 : 1 },
-            children: "❌ Cancelar"
+            children: "Cancelar"
           }
         )
       ] })
