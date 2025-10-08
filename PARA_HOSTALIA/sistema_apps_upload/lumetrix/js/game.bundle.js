@@ -5969,8 +5969,8 @@ function l0() {
       .drop-zone.drag-over{border-style:solid;transform:scale(1.1);box-shadow:0 0 25px currentColor}
       .lit{box-shadow:0 0 10px var(--accent), 0 0 18px var(--accent); filter:brightness(1.18)}
       .overlay{position:absolute;inset:0;display:grid;place-items:center;z-index:2}
-      .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50;padding:20px 0}
-      .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:400px}
+      .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+      .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:auto;max-height:80vh;overflow-y:auto}
       .card h3{margin-top:0;margin-bottom:16px;padding-top:4px}
       .card-compact{position:relative;width:240px;max-width:80vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:180px;max-height:220px}
       .closer{position:absolute;right:-10px;top:-10px;width:32px;height:32px;border-radius:999px;background:#000b;border:1px solid #ffffff33;color:#fff;display:grid;place-items:center;cursor:pointer}
@@ -6822,7 +6822,7 @@ function u0({ onClose: e, total: t }) {
     l ? /* @__PURE__ */ m.jsx("div", { style: { textAlign: "center", padding: "40px", color: "#00ffff66" }, children: "Cargando ranking..." }) : n.length === 0 ? /* @__PURE__ */ m.jsxs("div", { style: { textAlign: "center", padding: "40px", color: "#00ffff66" }, children: [
       /* @__PURE__ */ m.jsx("div", { style: { fontSize: 16, marginBottom: 8 }, children: "Aún no hay jugadores" }),
       /* @__PURE__ */ m.jsx("div", { style: { fontSize: 12 }, children: "¡Sé el primero en aparecer aquí!" })
-    ] }) : /* @__PURE__ */ m.jsx("div", { className: "list", style: { gap: "8px", maxHeight: "300px", overflowY: "auto", paddingRight: "4px" }, children: n.map((p) => {
+    ] }) : /* @__PURE__ */ m.jsx("div", { className: "list", style: { gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }, children: n.map((p) => {
       const h = i && p.email === i;
       return /* @__PURE__ */ m.jsxs(
         "div",
@@ -6842,14 +6842,15 @@ function u0({ onClose: e, total: t }) {
           children: [
             h && /* @__PURE__ */ m.jsx("div", { style: {
               position: "absolute",
-              right: "8px",
-              top: "-8px",
+              right: "4px",
+              top: "4px",
               background: "#FFD700",
               color: "#000",
-              fontSize: "9px",
+              fontSize: "8px",
               fontWeight: "bold",
-              padding: "2px 6px",
-              borderRadius: "10px"
+              padding: "1px 4px",
+              borderRadius: "6px",
+              zIndex: 10
             }, children: "TÚ" }),
             /* @__PURE__ */ m.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
               /* @__PURE__ */ m.jsxs("span", { style: {

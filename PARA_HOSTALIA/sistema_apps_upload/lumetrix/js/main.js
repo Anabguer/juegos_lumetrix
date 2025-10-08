@@ -1,4 +1,4 @@
-import { mount } from './game.bundle.js?v=20251008-1710'
+import { mount } from './game.bundle.js?v=20251008-1715'
 
 const root = document.getElementById('gameRoot')
 if (root && typeof mount === 'function') {
