@@ -1822,30 +1822,33 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 
 // ---------------- Modales ----------------
 function Ranking({ onClose, total }){
-  // Generar ranking dinámico basado en tu tiempo
-  const generateRanking = () => {
-    const baseTime = Math.max(30, total); // Mínimo 30s para evitar tiempos imposibles
-    const players = [
-      { name: 'CyberNinja', time: baseTime - 15 + Math.random() * 10, level: 20, world: 4 },
-      { name: 'NeonMaster', time: baseTime - 10 + Math.random() * 8, level: 19, world: 3 },
-      { name: 'LumetrixPro', time: baseTime - 5 + Math.random() * 6, level: 18, world: 3 },
-      { name: 'QuantumGamer', time: baseTime - 2 + Math.random() * 4, level: 17, world: 3 },
-      { name: 'PixelWarrior', time: baseTime + Math.random() * 3, level: 16, world: 3 },
-      { name: 'DigitalHero', time: baseTime + 2 + Math.random() * 4, level: 15, world: 2 },
-      { name: 'GlitchKing', time: baseTime + 5 + Math.random() * 6, level: 14, world: 2 },
-      { name: 'CodeBreaker', time: baseTime + 8 + Math.random() * 8, level: 13, world: 2 },
-      { name: 'ByteSmasher', time: baseTime + 12 + Math.random() * 10, level: 12, world: 2 },
-      { name: 'Tú', time: total, level: Math.floor(total/10) + 1, world: Math.floor(total/50) + 1 }
-    ];
-    
-    // Ordenar por tiempo (menor tiempo = mejor ranking)
-    return players.sort((a, b) => a.time - b.time).map((player, index) => ({
-      ...player,
-      rank: index + 1
-    }));
-  };
+  const [rankingData, setRankingData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const rankingData = generateRanking();
+  useEffect(() => {
+    const loadRanking = async () => {
+      try {
+        if (window.LUM_API && window.LUM_API.api) {
+          const result = await window.LUM_API.api('ranking.php?action=global');
+          if (result && result.success && result.data) {
+            setRankingData(result.data.map((player, index) => ({
+              rank: index + 1,
+              name: player.nick,
+              level: player.level,
+              time: player.total_time_s,
+              world: Math.floor((player.level - 1) / 10) + 1
+            })));
+          }
+        }
+      } catch (e) {
+        console.log('Error cargando ranking:', e);
+        setRankingData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRanking();
+  }, []);
 
   const getRankColor = (rank) => {
     if (rank === 1) return '#FFD700'; // Oro
@@ -1855,43 +1858,56 @@ function Ranking({ onClose, total }){
   };
 
   const getRankIcon = (rank) => {
-    if (rank <= 3) return ['🥇', '🥈', '🥉'][rank - 1];
-    return '🏆';
+    if (rank === 1) return '1';
+    if (rank === 2) return '2';
+    if (rank === 3) return '3';
+    return rank;
   };
-
-  const yourRank = rankingData.find(p => p.name === 'Tú')?.rank || 10;
 
   return (
     <div className="modal"><div className="card" style={{border:'2px solid #00ffff',boxShadow:'0 0 20px #00ffff44'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #00ffff',boxShadow:'0 0 10px #00ffff',background:'#000'}}>✕</button>
       <h3 style={{ color: '#00ffff', marginTop:0, textShadow:'0 0 10px #00ffff, 0 0 20px #00ffff', fontSize:'20px' }}>RANKING GLOBAL</h3>
-      <div className="list" style={{gap:'8px',maxHeight:'300px',overflowY:'auto'}}>
-        {rankingData.map(player => {
-          const isYou = player.name === 'Tú';
-          return (
-            <div key={player.rank} style={{
-              background: isYou ? 'rgba(0,255,255,0.3)' : 'rgba(0,255,255,0.1)',
-              border: isYou ? '2px solid #00ffff' : '1px solid #00ffff33',
-              borderRadius:'8px',
-              padding:'10px',
-              display:'flex',
-              justifyContent:'space-between',
-              alignItems:'center',
-              boxShadow: isYou ? '0 0 15px #00ffff66' : 'none'
-            }}>
-              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <span style={{fontSize:'16px'}}>{getRankIcon(player.rank)}</span>
-                <span style={{color: getRankColor(player.rank), fontWeight:'bold', fontSize:'14px'}}>#{player.rank}</span>
-                <span style={{color: isYou ? '#00ffff' : '#fff', fontSize:'12px', fontWeight: isYou ? 'bold' : 'normal'}}>{player.name}</span>
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px',color:'#00ffff66'}}>Cargando ranking...</div>
+      ) : rankingData.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px',color:'#00ffff66'}}>
+          <div style={{fontSize:16,marginBottom:8}}>Aún no hay jugadores</div>
+          <div style={{fontSize:12}}>¡Sé el primero en aparecer aquí!</div>
+        </div>
+      ) : (
+        <div className="list" style={{gap:'8px',maxHeight:'300px',overflowY:'auto'}}>
+          {rankingData.map(player => {
+            return (
+              <div key={player.rank} style={{
+                background: 'rgba(0,255,255,0.1)',
+                border: '1px solid #00ffff33',
+                borderRadius:'8px',
+                padding:'10px',
+                display:'flex',
+                justifyContent:'space-between',
+                alignItems:'center'
+              }}>
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <span style={{
+                    color: getRankColor(player.rank), 
+                    fontWeight:'bold', 
+                    fontSize:'14px',
+                    minWidth:'30px'
+                  }}>
+                    #{getRankIcon(player.rank)}
+                  </span>
+                  <span style={{color: '#fff', fontSize:'12px'}}>{player.name}</span>
+                </div>
+                <div style={{textAlign:'right', fontSize:'11px', opacity:0.8}}>
+                  <div>Mundo {player.world} • Nivel {player.level}</div>
+                  <div style={{color:'#00ffff'}}>{Math.round(player.time)}s</div>
+                </div>
               </div>
-              <div style={{textAlign:'right', fontSize:'11px', opacity:0.8}}>
-                <div>W{player.world} • N{player.level}</div>
-                <div style={{color:'#00ffff'}}>{Math.round(player.time)}s</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div></div>
   );
 }
