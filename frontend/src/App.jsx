@@ -301,8 +301,8 @@ function useLumetrixStyles(){
       .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
       .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 105px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
       @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent)}50%{box-shadow:0 0 14px var(--accent),0 0 18px var(--accent)}}
-      .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .06s ease;cursor:pointer}
-      .tile:active{transform:scale(.985)}
+      .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .2s ease-out, box-shadow .2s ease-out;cursor:pointer}
+      .tile:active{transform:scale(1.05);box-shadow:0 0 15px currentColor, 0 0 25px currentColor}
       .tile.dragging{transform:scale(1.1);z-index:100;box-shadow:0 0 20px rgba(255,255,255,0.5);cursor:grabbing}
       .drop-zone{border:3px solid #ffffff66;border-radius:12px;background:transparent;pointer-events:none;z-index:100}
       .drop-zone.drag-over{border-style:solid;transform:scale(1.1);box-shadow:0 0 25px currentColor}
@@ -1699,8 +1699,16 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           <div className="overlay">
             <div className="card-compact" style={{textAlign:'center'}}>
               <div style={{fontSize:32, marginBottom:8, textShadow:'0 0 10px var(--neon2), 0 0 20px var(--neon2)'}}>✨</div>
-              <h3 style={{color:'var(--neon2)', marginBottom:12}}>¡Nivel superado!</h3>
-              <button className="btn btn1" onClick={nextLevel}>Siguiente</button>
+              <h3 style={{color:'var(--neon2)', marginBottom:8}}>¡Nivel superado!</h3>
+              <div style={{fontSize:16, color:'#ffffff88', marginBottom:16}}>
+                Tiempo: {timeFor(level) - time}s
+              </div>
+              <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
+                <button className="btn btn1" onClick={nextLevel}>Siguiente</button>
+                <button className="btn" onClick={()=>{setWin(false); start();}} style={{border:'2px solid #ff6b6b', color:'#ff6b6b', boxShadow:'0 0 10px #ff6b6b44'}}>
+                  Reiniciar
+                </button>
+              </div>
             </div>
           </div>
         )}
