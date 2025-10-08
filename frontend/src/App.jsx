@@ -932,11 +932,13 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         // Guardar progreso en API (nivel desbloqueado = actual + 1)
         try {
           if (window.LUM_API) {
+            const puntos = calculatePuntos(level, timeFor(level) - time);
             window.LUM_API.api('game.php?action=save_progress', {
               method: 'POST',
               body: JSON.stringify({
                 level: level + 1,  // Próximo nivel desbloqueado
                 total_time_s: spent,
+                puntos: puntos,
                 success: 1
               })
             }).catch(e => {
@@ -1299,6 +1301,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                 body: JSON.stringify({
                   level,
                   total_time_s: spent,
+                  puntos: 0, // No hay puntos al perder
                   success: 0
                 })
               }).catch(e => {
@@ -1502,11 +1505,13 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             // Al GANAR: guardar progreso en API (próximo nivel desbloqueado)
             try {
               if (window.LUM_API) {
+                const puntos = calculatePuntos(level, timeFor(level) - time);
                 window.LUM_API.api('game.php?action=save_progress', {
                   method: 'POST',
                   body: JSON.stringify({
                     level: level + 1,  // Próximo nivel desbloqueado
                     total_time_s: spent,
+                    puntos: puntos,
                     success: 1
                   })
                 }).catch(e => {
@@ -1688,7 +1693,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         <div className="timebar"><i className="timefill" style={{ width: `${Math.max(0, Math.min(100, (time / timeFor(level)) * 100))}%` }} /></div>
         <div className="meta">
           <span className="chip">Nivel <b>{level}</b></span>
-          <span className="chip">⏱ <b>{totalTime}s</b></span>
+          <span className="chip">🏆 <b>{totalPuntos} pts</b></span>
         </div>
       </div>
       <div className="board" ref={boardRef}>
@@ -1804,7 +1809,7 @@ function Ranking({ onClose, total }){
               name: player.nick,
               email: player.email,
               level: player.level,
-              time: player.total_time_s,
+              puntos: player.total_puntos,
               world: Math.floor((player.level - 1) / 10) + 1
             })));
           }
@@ -1900,7 +1905,7 @@ function Ranking({ onClose, total }){
                 </div>
                 <div style={{textAlign:'right', fontSize:'11px', opacity:0.8}}>
                   <div>Mundo {player.world} • Nivel {player.level}</div>
-                  <div style={{color: isCurrentUser ? '#FFD700' : '#00ffff'}}>{Math.round(player.time)}s</div>
+                  <div style={{color: isCurrentUser ? '#FFD700' : '#00ffff'}}>{player.puntos} pts</div>
                 </div>
               </div>
             );
