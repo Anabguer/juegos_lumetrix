@@ -6822,7 +6822,7 @@ function u0({ onClose: e, total: t }) {
     l ? /* @__PURE__ */ m.jsx("div", { style: { textAlign: "center", padding: "40px", color: "#00ffff66" }, children: "Cargando ranking..." }) : n.length === 0 ? /* @__PURE__ */ m.jsxs("div", { style: { textAlign: "center", padding: "40px", color: "#00ffff66" }, children: [
       /* @__PURE__ */ m.jsx("div", { style: { fontSize: 16, marginBottom: 8 }, children: "Aún no hay jugadores" }),
       /* @__PURE__ */ m.jsx("div", { style: { fontSize: 12 }, children: "¡Sé el primero en aparecer aquí!" })
-    ] }) : /* @__PURE__ */ m.jsx("div", { className: "list", style: { gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }, children: n.map((p) => {
+    ] }) : /* @__PURE__ */ m.jsx("div", { className: "list", style: { gap: "8px", maxHeight: "400px", overflowY: "auto", paddingRight: "4px" }, children: n.map((p) => {
       const h = i && p.email === i;
       return /* @__PURE__ */ m.jsxs(
         "div",

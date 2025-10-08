@@ -1820,7 +1820,7 @@ function Ranking({ onClose, total }){
           <div style={{fontSize:12}}>¡Sé el primero en aparecer aquí!</div>
         </div>
       ) : (
-        <div className="list" style={{gap:'8px',maxHeight:'250px',overflowY:'auto',paddingRight:'4px'}}>
+        <div className="list" style={{gap:'8px',maxHeight:'400px',overflowY:'auto',paddingRight:'4px'}}>
           {rankingData.map(player => {
             const isCurrentUser = currentUserEmail && player.email === currentUserEmail;
             return (
