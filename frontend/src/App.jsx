@@ -497,8 +497,7 @@ function Intro({ onPlay, onAuth }){
           {isLoggedIn ? (
             // Usuario logueado - mostrar progreso guardado
             <div style={{textAlign:'center',marginTop:20}}>
-              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:4}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
-              <div style={{fontSize:13,opacity:0.6,marginBottom:16}}>Partida guardada</div>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:16}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
               <div className="actions" style={{marginBottom:8}}>
                 <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
               </div>

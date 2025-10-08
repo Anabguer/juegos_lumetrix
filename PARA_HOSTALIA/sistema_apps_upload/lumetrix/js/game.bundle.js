@@ -6149,12 +6149,11 @@ function o0({ onPlay: e, onAuth: t }) {
       l ? (
         // Usuario logueado - mostrar progreso guardado
         /* @__PURE__ */ m.jsxs("div", { style: { textAlign: "center", marginTop: 20 }, children: [
-          /* @__PURE__ */ m.jsxs("div", { style: { fontSize: 18, opacity: 0.9, color: "#39ff14", fontWeight: 700, marginBottom: 4 }, children: [
+          /* @__PURE__ */ m.jsxs("div", { style: { fontSize: 18, opacity: 0.9, color: "#39ff14", fontWeight: 700, marginBottom: 16 }, children: [
             "¡Hola, ",
             (i == null ? void 0 : i.nick) || "Usuario",
             "!"
           ] }),
-          /* @__PURE__ */ m.jsx("div", { style: { fontSize: 13, opacity: 0.6, marginBottom: 16 }, children: "Partida guardada" }),
           /* @__PURE__ */ m.jsx("div", { className: "actions", style: { marginBottom: 8 }, children: /* @__PURE__ */ m.jsx("button", { className: "btn btn1", onClick: e, children: "CONTINUAR" }) }),
           /* @__PURE__ */ m.jsx(
             "button",
