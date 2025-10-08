@@ -299,8 +299,8 @@ function useLumetrixStyles(){
       .meta .chip b{font-weight:700;margin-right:4px}
       .timebar{flex:1;height:12px;border-radius:999px;border:1px solid var(--accent);box-shadow:0 0 6px #ffffff22, 0 0 12px var(--accent)}
       .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
-      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent),0 0 20px var(--accent);height:calc(100% - 105px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
-      @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent),0 0 20px var(--accent)}50%{box-shadow:0 0 18px var(--accent),0 0 30px var(--accent),0 0 40px var(--accent)}}
+      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 105px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
+      @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent)}50%{box-shadow:0 0 16px var(--accent),0 0 24px var(--accent)}}
       .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .06s ease;cursor:pointer}
       .tile:active{transform:scale(.985)}
       .tile.dragging{transform:scale(1.1);z-index:100;box-shadow:0 0 20px rgba(255,255,255,0.5);cursor:grabbing}
@@ -308,8 +308,9 @@ function useLumetrixStyles(){
       .drop-zone.drag-over{border-style:solid;transform:scale(1.1);box-shadow:0 0 25px currentColor}
       .lit{box-shadow:0 0 10px var(--accent), 0 0 18px var(--accent); filter:brightness(1.18)}
       .overlay{position:absolute;inset:0;display:grid;place-items:center;z-index:2}
-      .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50}
-      .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:16px;min-height:400px}
+      .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50;padding:20px 0}
+      .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:400px}
+      .card h3{margin-top:0;margin-bottom:16px;padding-top:4px}
       .card-compact{position:relative;width:240px;max-width:80vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:180px;max-height:220px}
       .closer{position:absolute;right:-10px;top:-10px;width:32px;height:32px;border-radius:999px;background:#000b;border:1px solid #ffffff33;color:#fff;display:grid;place-items:center;cursor:pointer}
       .list{display:flex;flex-direction:column;gap:8px}
@@ -1983,16 +1984,18 @@ function Auth({ onClose }){
             Mi cuenta
           </h3>
           <div className="list" style={{gap:12}}>
-            <div style={{background:'rgba(255,0,255,0.1)',border:'1px solid #ff00ff33',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
-              <div style={{fontSize:12,opacity:0.6,marginBottom:4}}>Jugador</div>
-              <div style={{fontSize:20,color:'#ff00ff',fontWeight:'bold',marginBottom:4}}>{userInfo?.nick || 'Usuario'}</div>
-              <div style={{fontSize:11,opacity:0.5,marginBottom:8}}>{userInfo?.email}</div>
-              {userInfo?.fecha_registro && (
-                <div style={{fontSize:9,opacity:0.4}}>
-                  Desde {new Date(userInfo.fecha_registro).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}
-                </div>
-              )}
-            </div>
+            {userInfo && (
+              <div style={{background:'rgba(255,0,255,0.1)',border:'1px solid #ff00ff33',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
+                <div style={{fontSize:12,opacity:0.6,marginBottom:4}}>Jugador</div>
+                <div style={{fontSize:20,color:'#ff00ff',fontWeight:'bold',marginBottom:4}}>{userInfo.nick}</div>
+                <div style={{fontSize:11,opacity:0.5,marginBottom:8}}>{userInfo.email}</div>
+                {userInfo.fecha_registro && (
+                  <div style={{fontSize:9,opacity:0.4}}>
+                    Desde {new Date(userInfo.fecha_registro).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}
+                  </div>
+                )}
+              </div>
+            )}
             
             <button 
               className="btn" 
