@@ -6964,7 +6964,19 @@ function a0({ onClose: e }) {
               style: { border: "2px solid #ff4466", color: "#ff4466", boxShadow: "0 0 10px #ff446644", fontWeight: "bold", width: "100%", opacity: p ? 0.5 : 1 },
               children: p ? "Cerrando..." : "Cerrar sesión"
             }
-          )
+          ),
+          /* @__PURE__ */ m.jsxs("div", { style: { fontSize: 10, opacity: 0.4, textAlign: "center", marginTop: 8, lineHeight: 1.4 }, children: [
+            "¿Eliminar cuenta?",
+            " ",
+            /* @__PURE__ */ m.jsx(
+              "a",
+              {
+                href: "mailto:info@intocables13.com?subject=Eliminar cuenta - Lumetrix&body=Solicito la eliminación de mi cuenta con el email: ",
+                style: { color: "#ff00ff", textDecoration: "underline" },
+                children: "Contactar"
+              }
+            )
+          ] })
         ] })
       ] })
     ) : (

@@ -1996,6 +1996,16 @@ function Auth({ onClose }){
             >
               {loading ? 'Cerrando...' : 'Cerrar sesión'}
             </button>
+
+            <div style={{fontSize:10,opacity:0.4,textAlign:'center',marginTop:8,lineHeight:1.4}}>
+              ¿Eliminar cuenta?{' '}
+              <a 
+                href="mailto:info@intocables13.com?subject=Eliminar cuenta - Lumetrix&body=Solicito la eliminación de mi cuenta con el email: " 
+                style={{color:'#ff00ff',textDecoration:'underline'}}
+              >
+                Contactar
+              </a>
+            </div>
           </div>
         </>
       ) : (
