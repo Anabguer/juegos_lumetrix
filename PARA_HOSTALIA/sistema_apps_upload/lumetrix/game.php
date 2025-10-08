@@ -14,6 +14,7 @@ if ($act === 'save_progress') {
     $uakey = $_SESSION['uakey']; // ÚNICO origen de verdad (no aceptar del cliente)
     $level = max(1, (int)($in['level'] ?? 1));
     $time  = max(0, (int)($in['total_time_s'] ?? 0));
+    $puntos = max(0, (int)($in['puntos'] ?? 0));
     $succ  = (int)($in['success'] ?? 0);
     
     $pdo = db();
@@ -23,21 +24,22 @@ if ($act === 'save_progress') {
         
         // 1. Guardar run histórico
         $st = $pdo->prepare("
-            INSERT INTO lumetrix_runs (usuario_aplicacion_key, level, duration_s, success)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO lumetrix_runs (usuario_aplicacion_key, level, duration_s, success, puntos)
+            VALUES (?, ?, ?, ?, ?)
         ");
-        $st->execute([$uakey, $level, $time, $succ]);
+        $st->execute([$uakey, $level, $time, $succ, $puntos]);
         
         // 2. Actualizar progreso agregado (UPSERT)
         $st = $pdo->prepare("
-            INSERT INTO lumetrix_progreso (usuario_aplicacion_key, nivel_actual, total_time_s)
-            VALUES (:k, :lvl, :tt)
+            INSERT INTO lumetrix_progreso (usuario_aplicacion_key, nivel_actual, total_time_s, total_puntos)
+            VALUES (:k, :lvl, :tt, :pts)
             ON DUPLICATE KEY UPDATE
                 nivel_actual = GREATEST(nivel_actual, VALUES(nivel_actual)),
                 total_time_s = total_time_s + VALUES(total_time_s),
+                total_puntos = total_puntos + VALUES(total_puntos),
                 updated_at = CURRENT_TIMESTAMP
         ");
-        $st->execute([':k' => $uakey, ':lvl' => $level, ':tt' => $time]);
+        $st->execute([':k' => $uakey, ':lvl' => $level, ':tt' => $time, ':pts' => $puntos]);
         
         $pdo->commit();
         

@@ -541,7 +541,33 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const [lose, setLose] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
+  const [totalPuntos, setTotalPuntos] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_puntos')||'0'))||0; }catch{return 0;} });
   useEffect(()=>{ if(typeof totalProp === 'number') setTotalTime(totalProp); }, [totalProp]);
+
+  // Función para calcular puntos
+  const calculatePuntos = (level, timeRemaining, isFirstAttempt = true, hasErrors = false) => {
+    // Puntos base por nivel
+    let basePuntos = 10;
+    if (level <= 10) basePuntos = 10;
+    else if (level <= 20) basePuntos = 15;
+    else if (level <= 30) basePuntos = 20;
+    else if (level <= 40) basePuntos = 25;
+    else basePuntos = 30;
+
+    // Bonus por velocidad
+    let speedBonus = 0;
+    if (timeRemaining <= 5) speedBonus = 0;
+    else if (timeRemaining <= 10) speedBonus = 5;
+    else if (timeRemaining <= 15) speedBonus = 10;
+    else speedBonus = 15;
+
+    // Bonus especial
+    let specialBonus = 0;
+    if (isFirstAttempt) specialBonus += 10;
+    if (!hasErrors) specialBonus += 5;
+
+    return basePuntos + speedBonus + specialBonus;
+  };
 
   const SFX = useSFX(soundOn, musicVolume);
   const world = Math.floor((level-1)/10) + 1;
@@ -1701,7 +1727,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               <div style={{fontSize:32, marginBottom:8, textShadow:'0 0 10px var(--neon2), 0 0 20px var(--neon2)'}}>✨</div>
               <h3 style={{color:'var(--neon2)', marginBottom:8}}>¡Nivel superado!</h3>
               <div style={{fontSize:16, color:'#ffffff88', marginBottom:16}}>
-                Tiempo: {timeFor(level) - time}s
+                Puntos: {calculatePuntos(level, timeFor(level) - time)} pts
               </div>
               <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
                 <button className="btn" onClick={()=>{setWin(false); start();}} style={{border:'2px solid #ff6b6b', color:'#ff6b6b', boxShadow:'0 0 10px #ff6b6b44'}}>
