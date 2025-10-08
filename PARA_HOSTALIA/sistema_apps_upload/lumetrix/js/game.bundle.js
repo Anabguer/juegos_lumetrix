@@ -5960,9 +5960,8 @@ function l0() {
       .meta .chip b{font-weight:700;margin-right:4px}
       .timebar{flex:1;height:12px;border-radius:999px;border:1px solid var(--accent);box-shadow:0 0 6px #ffffff22, 0 0 12px var(--accent)}
       .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
-      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 105px);overflow:visible}
-      .board::after{content:'';position:absolute;inset:-4px;border-radius:18px;background:conic-gradient(from 0deg at 50% 50%, transparent 0deg, var(--accent) 90deg, transparent 180deg);animation:rotateBorder 3s linear infinite;pointer-events:none;z-index:-1;opacity:0.5;filter:blur(2px)}
-      @keyframes rotateBorder{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent),0 0 20px var(--accent);height:calc(100% - 105px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
+      @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent),0 0 20px var(--accent)}50%{box-shadow:0 0 18px var(--accent),0 0 30px var(--accent),0 0 40px var(--accent)}}
       .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .06s ease;cursor:pointer}
       .tile:active{transform:scale(.985)}
       .tile.dragging{transform:scale(1.1);z-index:100;box-shadow:0 0 20px rgba(255,255,255,0.5);cursor:grabbing}
