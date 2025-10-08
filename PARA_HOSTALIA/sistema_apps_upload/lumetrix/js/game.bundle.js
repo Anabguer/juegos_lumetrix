@@ -5854,7 +5854,7 @@ function r0(e, t = 0.15) {
   }, c = () => {
     if (!r.current)
       try {
-        const v = new Audio("sistema_apps_api/lumetrix/audiofondo.mp3");
+        const v = new Audio("lumetrix/audio/audiofondo.mp3");
         v.loop = !0, v.volume = t, r.current = v;
       } catch (v) {
         console.log("Error cargando audio de fondo:", v);
@@ -5878,7 +5878,7 @@ function r0(e, t = 0.15) {
   }, S = () => {
     if (!l.current)
       try {
-        const v = new Audio("sistema_apps_api/lumetrix/jugar.mp3");
+        const v = new Audio("lumetrix/audio/jugar.mp3");
         v.volume = 0.7, l.current = v;
       } catch (v) {
         console.log("Error cargando audio de inicio:", v);
@@ -6117,7 +6117,7 @@ function o0({ onPlay: e, onAuth: t }) {
     ] }),
     /* @__PURE__ */ m.jsxs("div", { className: "panel", children: [
       /* @__PURE__ */ m.jsxs("h1", { className: "logo", children: [
-        /* @__PURE__ */ m.jsx("img", { src: "sistema_apps_api/lumetrix/img/logo.png", alt: "LUMETRIX", style: {
+        /* @__PURE__ */ m.jsx("img", { src: "lumetrix/img/logo.png", alt: "LUMETRIX", style: {
           height: "150px",
           width: "500px",
           filter: "drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)",
@@ -6649,7 +6649,7 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
   }, [Me, ue, tn]), /* @__PURE__ */ m.jsxs("section", { className: "screen", children: [
     /* @__PURE__ */ m.jsxs("div", { className: "topbar", children: [
       /* @__PURE__ */ m.jsxs("div", { className: "brand", style: { display: "flex", alignItems: "center", gap: "12px" }, children: [
-        /* @__PURE__ */ m.jsx("img", { src: "sistema_apps_api/lumetrix/img/logo2.png", alt: "LUMETRIX", style: { height: "32px", width: "auto" }, onError: (y) => {
+        /* @__PURE__ */ m.jsx("img", { src: "lumetrix/img/logo2.png", alt: "LUMETRIX", style: { height: "32px", width: "auto" }, onError: (y) => {
           y.target.style.display = "none", y.target.nextSibling.style.display = "inline";
         } }),
         /* @__PURE__ */ m.jsx("span", { style: { display: "none", fontSize: "16px", fontWeight: "900", letterSpacing: "0.1em", color: "#fff" }, children: "LUMETRIX" }),
@@ -6698,19 +6698,19 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
       ] }),
       /* @__PURE__ */ m.jsxs("div", { className: "icons", children: [
         /* @__PURE__ */ m.jsxs("button", { className: "icon", onClick: u, "aria-label": "Ranking", children: [
-          /* @__PURE__ */ m.jsx("img", { src: "sistema_apps_api/lumetrix/img/ico_ranking.png", alt: "Ranking", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
+          /* @__PURE__ */ m.jsx("img", { src: "lumetrix/img/ico_ranking.png", alt: "Ranking", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
             y.target.style.display = "none", y.target.nextSibling.style.display = "inline";
           } }),
           /* @__PURE__ */ m.jsx("span", { style: { display: "none", fontSize: "20px" }, children: "🏆" })
         ] }),
         /* @__PURE__ */ m.jsxs("button", { className: "icon", onClick: s, "aria-label": "Opciones", children: [
-          /* @__PURE__ */ m.jsx("img", { src: "sistema_apps_api/lumetrix/img/ico_config.png", alt: "Configuración", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
+          /* @__PURE__ */ m.jsx("img", { src: "lumetrix/img/ico_config.png", alt: "Configuración", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
             y.target.style.display = "none", y.target.nextSibling.style.display = "inline";
           } }),
           /* @__PURE__ */ m.jsx("span", { style: { display: "none", fontSize: "20px" }, children: "⚙️" })
         ] }),
         /* @__PURE__ */ m.jsxs("button", { className: "icon", onClick: i, "aria-label": "Login", children: [
-          /* @__PURE__ */ m.jsx("img", { src: "sistema_apps_api/lumetrix/img/ico_user.png", alt: "Usuario", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
+          /* @__PURE__ */ m.jsx("img", { src: "lumetrix/img/ico_user.png", alt: "Usuario", style: { width: "32px", height: "32px", objectFit: "contain" }, onError: (y) => {
             y.target.style.display = "none", y.target.nextSibling.style.display = "inline";
           } }),
           /* @__PURE__ */ m.jsx("span", { style: { display: "none", fontSize: "20px" }, children: "👤" })

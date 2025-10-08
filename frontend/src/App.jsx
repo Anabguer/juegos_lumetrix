@@ -185,7 +185,7 @@ function useSFX(enabled, volume = 0.15){
   const initBgAudio = () => {
     if (bgAudioRef.current) return;
     try {
-      const audio = new Audio('lumetrix/audiofondo.mp3');
+      const audio = new Audio('lumetrix/audio/audiofondo.mp3');
       audio.loop = true;
       audio.volume = volume; // Volumen dinámico
       bgAudioRef.current = audio;
@@ -221,7 +221,7 @@ function useSFX(enabled, volume = 0.15){
   const initStartAudio = () => {
     if (startAudioRef.current) return;
     try {
-      const audio = new Audio('lumetrix/jugar.mp3');
+      const audio = new Audio('lumetrix/audio/jugar.mp3');
       audio.volume = 0.7; // Volumen medio para el sonido de inicio
       startAudioRef.current = audio;
     } catch (e) {

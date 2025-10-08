@@ -14,7 +14,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DIST_DIR = path.join(__dirname, '..', 'dist');
-const TARGET_DIR = path.join(__dirname, '..', '..', 'PARA_HOSTALIA', 'sistema_apps_upload', 'sistema_apps_api', 'lumetrix', 'js');
+const TARGET_DIR = path.join(__dirname, '..', '..', 'PARA_HOSTALIA', 'sistema_apps_upload', 'lumetrix', 'js');
 
 const FILES_TO_COPY = [
   'game.bundle.js',
