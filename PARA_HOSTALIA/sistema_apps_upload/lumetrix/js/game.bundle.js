@@ -5972,7 +5972,7 @@ function l0() {
       .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
       .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:auto;max-height:80vh;overflow-y:auto}
       .card h3{margin-top:0;margin-bottom:16px;padding-top:4px}
-      .card-compact{position:relative;width:240px;max-width:80vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:180px;max-height:220px}
+      .card-compact{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:24px;min-height:200px;max-height:240px}
       .closer{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:999px;background:#000b;border:1px solid #ffffff33;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;font-size:14px;line-height:1}
       .list{display:flex;flex-direction:column;gap:8px}
       .bokeh{pointer-events:none}
@@ -6753,10 +6753,10 @@ function i0({ level: e, setLevel: t, soundOn: n, musicOn: r, musicVolume: l, vib
           "s"
         ] }),
         /* @__PURE__ */ m.jsxs("div", { style: { display: "flex", gap: "12px", justifyContent: "center" }, children: [
-          /* @__PURE__ */ m.jsx("button", { className: "btn btn1", onClick: Tf, children: "Siguiente" }),
           /* @__PURE__ */ m.jsx("button", { className: "btn", onClick: () => {
             f(!1), Cn();
-          }, style: { border: "2px solid #ff6b6b", color: "#ff6b6b", boxShadow: "0 0 10px #ff6b6b44" }, children: "Reiniciar" })
+          }, style: { border: "2px solid #ff6b6b", color: "#ff6b6b", boxShadow: "0 0 10px #ff6b6b44" }, children: "Reiniciar" }),
+          /* @__PURE__ */ m.jsx("button", { className: "btn btn1", onClick: Tf, children: "Siguiente" })
         ] })
       ] }) }),
       a && /* @__PURE__ */ m.jsx("div", { className: "overlay", children: /* @__PURE__ */ m.jsxs("div", { className: "card-compact", style: { textAlign: "center" }, children: [
