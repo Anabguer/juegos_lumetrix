@@ -1,4 +1,4 @@
-const BASE = 'sistema_apps_api/lumetrix/';
+const BASE = 'lumetrix/';
 async function api(path, opt = {}) {
   const res = await fetch(BASE + path, {
     credentials: 'same-origin',

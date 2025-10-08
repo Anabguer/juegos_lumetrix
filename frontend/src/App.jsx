@@ -185,7 +185,7 @@ function useSFX(enabled, volume = 0.15){
   const initBgAudio = () => {
     if (bgAudioRef.current) return;
     try {
-      const audio = new Audio('sistema_apps_api/lumetrix/audiofondo.mp3');
+      const audio = new Audio('lumetrix/audiofondo.mp3');
       audio.loop = true;
       audio.volume = volume; // Volumen dinámico
       bgAudioRef.current = audio;
@@ -221,7 +221,7 @@ function useSFX(enabled, volume = 0.15){
   const initStartAudio = () => {
     if (startAudioRef.current) return;
     try {
-      const audio = new Audio('sistema_apps_api/lumetrix/jugar.mp3');
+      const audio = new Audio('lumetrix/jugar.mp3');
       audio.volume = 0.7; // Volumen medio para el sonido de inicio
       startAudioRef.current = audio;
     } catch (e) {
@@ -468,7 +468,7 @@ function Intro({ onPlay, onAuth }){
         </div>
         <div className="panel">
           <h1 className="logo">
-            <img src="sistema_apps_api/lumetrix/img/logo.png" alt="LUMETRIX" style={{
+            <img src="lumetrix/img/logo.png" alt="LUMETRIX" style={{
               height:'150px',
               width:'500px',
               filter:'drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)',
@@ -1643,7 +1643,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     <section className="screen">
       <div className="topbar">
         <div className="brand" style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-          <img src="sistema_apps_api/lumetrix/img/logo2.png" alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+          <img src="lumetrix/img/logo2.png" alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
           <span style={{display:'none',fontSize:'16px',fontWeight:'900',letterSpacing:'0.1em',color:'#fff'}}>LUMETRIX</span>
           <select 
             value={level} 
@@ -1685,15 +1685,15 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         </div>
         <div className="icons">
           <button className="icon" onClick={onOpenRanking} aria-label="Ranking">
-            <img src="sistema_apps_api/lumetrix/img/ico_ranking.png" alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src="lumetrix/img/ico_ranking.png" alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>🏆</span>
           </button>
           <button className="icon" onClick={onOpenOptions} aria-label="Opciones">
-            <img src="sistema_apps_api/lumetrix/img/ico_config.png" alt="Configuración" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src="lumetrix/img/ico_config.png" alt="Configuración" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>⚙️</span>
           </button>
           <button className="icon" onClick={onOpenAuth} aria-label="Login">
-            <img src="sistema_apps_api/lumetrix/img/ico_user.png" alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src="lumetrix/img/ico_user.png" alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>👤</span>
           </button>
         </div>
