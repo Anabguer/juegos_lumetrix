@@ -75,5 +75,10 @@ if ($act === 'check_session') {
   json_out(['success'=>true,'uakey'=>uakey(),'user'=>['key'=>uakey()] + $u]);
 }
 
+if ($act === 'logout') {
+  session_destroy();
+  json_out(['success'=>true,'message'=>'sesión cerrada']);
+}
+
 json_out(['success'=>false,'message'=>'acción inválida']);
 

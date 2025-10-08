@@ -394,6 +394,18 @@ function Intro({ onPlay, onAuth }){
   const bgRef = useRef(null); const logoRef = useRef(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  
+  const handleLogout = async () => {
+    try {
+      await window.LUM_API.api('auth.php?action=logout');
+      setIsLoggedIn(false);
+      setUserInfo(null);
+      window.location.reload();
+    } catch (e) {
+      console.log('Error al cerrar sesión');
+    }
+  };
+  
   useEffect(()=>{ 
     const bg=bgRef.current; if(!bg) return; 
     const spawn=()=>{ 
@@ -443,8 +455,8 @@ function Intro({ onPlay, onAuth }){
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (window.LUM_AUTH && window.LUM_AUTH.lum_check) {
-          const result = await window.LUM_AUTH.lum_check();
+        if (window.LUM_API && window.LUM_API.api) {
+          const result = await window.LUM_API.api('auth.php?action=check_session');
           if (result && result.success) {
             setIsLoggedIn(true);
             setUserInfo(result.user);
@@ -452,6 +464,8 @@ function Intro({ onPlay, onAuth }){
         }
       } catch (e) {
         console.log('No hay sesión activa');
+        setIsLoggedIn(false);
+        setUserInfo(null);
       }
     };
     checkAuth();
@@ -477,16 +491,24 @@ function Intro({ onPlay, onAuth }){
             <div style={{display:'none',fontSize:'48px',fontWeight:'900',letterSpacing:'0.1em',background:'linear-gradient(90deg,#39ff14,#00ffff,#ff00ff)',WebkitBackgroundClip:'text',backgroundClip:'text',color:'transparent',textShadow:'0 0 20px #39ff14,0 0 40px #00ffff,0 0 60px #ff00ff'}}>LUMETRIX</div>
           </h1>
           <div style={{textAlign:'center',fontSize:18,opacity:.9,marginTop:20,marginBottom:8,lineHeight:'1.4',fontWeight:500}}>Esto no es un Simón: es el <b>anti‑Simón</b>.<br/><br/><b>Encuentra</b> la secuencia y pinta <b>todas</b> las piezas del color del borde.</div>
-          <div className="actions" style={{marginTop:20}}>
-            <button className="btn btn1" onClick={onPlay}>Jugar</button>
-            {!isLoggedIn && (
-              <button className="btn btn2" onClick={onAuth}>Iniciar sesión</button>
-            )}
-          </div>
-          {isLoggedIn && (
-            <div style={{textAlign:'center',marginTop:8}}>
-              <div style={{fontSize:16,opacity:0.8,color:'#39ff14',fontWeight:600}}>¡Hola, {userInfo?.username || 'Usuario'}!</div>
-              <button className="btn btn2" onClick={onAuth} style={{marginTop:4,fontSize:11}}>Cerrar sesión</button>
+          
+          {isLoggedIn ? (
+            // Usuario logueado
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:12}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
+              <div className="actions" style={{marginBottom:8}}>
+                <button className="btn btn1" onClick={onPlay}>🎮 Jugar</button>
+              </div>
+              <button className="btn btn2" onClick={handleLogout} style={{fontSize:12,padding:'8px 16px'}}>🚪 Cerrar sesión</button>
+            </div>
+          ) : (
+            // Usuario NO logueado
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div className="actions" style={{marginBottom:12}}>
+                <button className="btn btn1" onClick={onPlay}>🎮 Jugar sin login</button>
+              </div>
+              <div style={{fontSize:14,opacity:0.7,marginBottom:8}}>¿Quieres guardar tu progreso?</div>
+              <button className="btn btn2" onClick={onAuth}>📝 Registrarse / Iniciar sesión</button>
             </div>
           )}
         </div>
@@ -1900,17 +1922,160 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
   );
 }
 function Auth({ onClose }){
+  const [mode, setMode] = useState('login'); // 'login' o 'register'
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async () => {
+    if (!username || !email || !password) {
+      setMessage('❌ Rellena todos los campos');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      });
+      
+      if (result.success) {
+        setMessage('✅ ¡Registrado! Ahora inicia sesión');
+        setMode('login');
+        setPassword('');
+      } else {
+        setMessage('❌ ' + (result.message || 'Error en registro'));
+      }
+    } catch (e) {
+      setMessage('❌ Error de conexión');
+    }
+    
+    setLoading(false);
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setMessage('❌ Rellena email y contraseña');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=login', {
+        method: 'POST',
+        body: JSON.stringify({ username: email, password })
+      });
+      
+      if (result.success) {
+        setMessage('✅ ¡Bienvenido!');
+        setTimeout(() => {
+          window.location.reload(); // Recargar para actualizar estado
+        }, 500);
+      } else {
+        setMessage('❌ ' + (result.message || 'Credenciales incorrectas'));
+      }
+    } catch (e) {
+      setMessage('❌ Error de conexión');
+    }
+    
+    setLoading(false);
+  };
+
   return (
     <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #ff00ff',boxShadow:'0 0 10px #ff00ff',background:'#000'}}>✕</button>
-      <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'20px' }}>👤 REGISTRARSE</h3>
+      
+      {/* Tabs */}
+      <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
+        <button 
+          onClick={() => setMode('login')}
+          style={{
+            background: mode === 'login' ? 'rgba(255,0,255,0.2)' : 'transparent',
+            border: 'none',
+            color: mode === 'login' ? '#ff00ff' : '#ffffff66',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontWeight: mode === 'login' ? 'bold' : 'normal',
+            fontSize: '14px'
+          }}
+        >
+          🔑 Iniciar sesión
+        </button>
+        <button 
+          onClick={() => setMode('register')}
+          style={{
+            background: mode === 'register' ? 'rgba(255,0,255,0.2)' : 'transparent',
+            border: 'none',
+            color: mode === 'register' ? '#ff00ff' : '#ffffff66',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontWeight: mode === 'register' ? 'bold' : 'normal',
+            fontSize: '14px'
+          }}
+        >
+          📝 Registrarse
+        </button>
+      </div>
+
+      <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
+        {mode === 'login' ? '🔑 Iniciar Sesión' : '📝 Crear Cuenta'}
+      </h3>
+      
       <div className="list" style={{gap:12}}>
-        <input placeholder="🎮 Nick" style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#ff00ff', boxShadow:'0 0 10px #ff00ff22' }} />
-        <input placeholder="📧 Correo" type="email" style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#ff00ff', boxShadow:'0 0 10px #ff00ff22' }} />
-        <input placeholder="🔒 Contraseña" type="password" style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#ff00ff', boxShadow:'0 0 10px #ff00ff22' }} />
+        {mode === 'register' && (
+          <input 
+            placeholder="🎮 Nick" 
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+          />
+        )}
+        <input 
+          placeholder="📧 Email" 
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+        />
+        <input 
+          placeholder="🔒 Contraseña" 
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
+          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+        />
+        
+        {message && (
+          <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('✅') ? '#39ff14' : '#ff4466'}}>
+            {message}
+          </div>
+        )}
+        
         <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8}}>
-          <button className="btn btn1" style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold'}}>✅ Registrarse</button>
-          <button className="btn" onClick={onClose} style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold'}}>❌ Cancelar</button>
+          <button 
+            className="btn btn1" 
+            onClick={mode === 'login' ? handleLogin : handleRegister}
+            disabled={loading}
+            style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
+          >
+            {loading ? '⏳ Espera...' : (mode === 'login' ? '🔑 Entrar' : '✅ Registrarse')}
+          </button>
+          <button 
+            className="btn" 
+            onClick={onClose}
+            disabled={loading}
+            style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1}}
+          >
+            ❌ Cancelar
+          </button>
         </div>
       </div>
     </div></div>
