@@ -123,21 +123,21 @@ const LEVEL_CONFIG = {
       id: 3,
       mechanics: [["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"]],
       tiles: [5,5,6,6,7,7,8,8,9,9],
-      time: [30,28,26,24,22,20,18,17,16,15],
+      time: [30,28,26,24,22,20,20,20,20,20],
       notes: "Mundo 3 — más fichas y menos tiempo."
     },
     {
       id: 4,
       mechanics: [["double"],["double"],["double"],["drag","double"],["drag"],["double"],["drag","double"],["drag","double"],["double"],["drag","double"]],
       tiles: [5,5,6,6,7,7,8,8,9,9],
-      time: [30,28,26,24,22,20,18,17,16,15],
+      time: [28,26,24,22,20,20,20,19,18,20],
       notes: "Mundo 4 — introduce doble toque y combina mecánicas."
     },
     {
       id: 5,
       mechanics: [["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"]],
       tiles: [6,7,8,8,9,9,9,9,9,9],
-      time: [26,24,22,20,19,18,17,16,15,14],
+      time: [24,22,20,20,20,20,19,18,18,20],
       notes: "Mundo 5 — dominio total de todas las mecánicas."
     }
   ]
