@@ -3,6 +3,22 @@
   "appName": "Lumetrix",
   "webDir": "../PARA_HOSTALIA/sistema_apps_upload/lumetrix",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowNavigation": [
+      "https://colisan.com/*",
+      "https://82.194.68.83/*",
+      "http://82.194.68.83/*"
+    ]
+  },
+  "plugins": {
+    "LiveUpdates": {
+      "appId": "com.colisan.lumetrix",
+      "channel": "production",
+      "autoUpdateMethod": "background",
+      "maxVersions": 2
+    },
+    "Network": {
+      "description": "Detectar estado de conexión"
+    }
   }
 }

@@ -155,7 +155,7 @@ const LEVEL_CONFIG = {
 };
 
 // ---------------- Sonido (WebAudio) ----------------
-function useSFX(enabled, volume = 0.15){
+function useSFX(enabled, volume = 0.08){
   const ctxRef = useRef(null);
   const bgAudioRef = useRef(null);
   const startAudioRef = useRef(null);
@@ -171,7 +171,7 @@ function useSFX(enabled, volume = 0.15){
       return ctxRef.current;
     }catch{ return null; }
   };
-  const tone = (f=440,d=0.12,type='sine',gain=0.07)=>{
+  const tone = (f=440,d=0.12,type='sine',gain=0.25)=>{
     const ctx=getCtx(); if(!ctx) return; try{
       const o=ctx.createOscillator(); const g=ctx.createGain();
       o.type=type; o.frequency.value=f; g.gain.value=gain;
@@ -185,7 +185,7 @@ function useSFX(enabled, volume = 0.15){
       if(ctx.state === 'suspended') { ctx.resume().catch(()=>{}); }
       arr.forEach((f,i)=>{
         const o=ctx.createOscillator(); const g=ctx.createGain();
-        o.type='triangle'; o.frequency.value=f; g.gain.value=0.08;
+        o.type='triangle'; o.frequency.value=f; g.gain.value=0.3;
         o.connect(g); g.connect(ctx.destination);
         const t=ctx.currentTime + i*(dur+gap);
         o.start(t); o.stop(t+dur);
@@ -2503,7 +2503,7 @@ export default function App(){
   const [showAuth, setShowAuth] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
-  const [musicVolume, setMusicVolume] = useState(0.15);
+  const [musicVolume, setMusicVolume] = useState(0.08);
   const [vibrateOn, setVibrateOn] = useState(true);
   const [level, setLevel] = useState(1);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });

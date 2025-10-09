@@ -58,7 +58,7 @@ if ($act === 'get_progress') {
     
     // Obtener progreso del usuario
     $st = $pdo->prepare("
-        SELECT nivel_actual, total_time_s, updated_at
+        SELECT nivel_actual, total_time_s, total_puntos, updated_at
         FROM lumetrix_progreso
         WHERE usuario_aplicacion_key = ?
     ");
@@ -70,11 +70,11 @@ if ($act === 'get_progress') {
     } else {
         // Si no existe progreso, crear registro inicial
         $pdo->prepare("
-            INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key, nivel_actual, total_time_s)
-            VALUES (?, 1, 0)
+            INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key, nivel_actual, total_time_s, total_puntos)
+            VALUES (?, 1, 0, 0)
         ")->execute([$uakey]);
         
-        json_out(['success' => true, 'data' => ['nivel_actual' => 1, 'total_time_s' => 0]]);
+        json_out(['success' => true, 'data' => ['nivel_actual' => 1, 'total_time_s' => 0, 'total_puntos' => 0]]);
     }
 }
 

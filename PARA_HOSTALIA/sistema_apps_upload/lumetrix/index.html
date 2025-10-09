@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumetrix - Juego de Memoria</title>
+    <link rel="stylesheet" href="css/lumetrix.css">
+    <link rel="icon" href="img/logo.png" type="image/png">
+</head>
+<body>
+    <div id="gameRoot"></div>
+    
+    <!-- Scripts -->
+    <script src="js/api-hybrid.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/game.bundle.js"></script>
+    <script>
+        // Inicialización del juego completo
+        document.addEventListener('DOMContentLoaded', function() {
+            const root = document.getElementById('gameRoot');
+            if (root && typeof window.LumetrixGame !== 'undefined') {
+                // Juego completo disponible
+                window.LumetrixGame.mount(root);
+            } else {
+                // Fallback: mostrar mensaje de carga
+                root.innerHTML = `
+                    <div style="
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        background: linear-gradient(135deg, #1a1a2e, #16213e);
+                        color: #e0e0e0;
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        padding: 20px;
+                    ">
+                        <h1 style="color: #00ffff; margin-bottom: 20px;">🎮 Lumetrix</h1>
+                        <div style="
+                            width: 40px;
+                            height: 40px;
+                            border: 3px solid #00ffff;
+                            border-top: 3px solid transparent;
+                            border-radius: 50%;
+                            animation: spin 1s linear infinite;
+                            margin: 20px auto;
+                        "></div>
+                        <p style="margin-bottom: 10px;">Cargando juego completo...</p>
+                        <p style="font-size: 14px; color: #888;">Modo híbrido: Online + Offline</p>
+                    </div>
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

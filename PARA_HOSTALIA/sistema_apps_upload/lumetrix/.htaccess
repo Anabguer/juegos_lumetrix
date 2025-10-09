@@ -5,8 +5,8 @@ Options -Indexes
   Require all denied
 </FilesMatch>
 
-# Permite imágenes, JS, CSS y audio
-<FilesMatch "\.(png|jpg|jpeg|gif|webp|svg|css|js|mp3|ogg|wav|woff|woff2)$">
+# Permite imágenes, JS, CSS, audio y HTML
+<FilesMatch "\.(png|jpg|jpeg|gif|webp|svg|css|js|mp3|ogg|wav|woff|woff2|html|htm)$">
   Require all granted
   Satisfy Any
 </FilesMatch>
