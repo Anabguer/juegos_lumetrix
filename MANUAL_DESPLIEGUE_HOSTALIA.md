@@ -715,10 +715,450 @@ LUM_DEBUG.clearAuth()
 
 ---
 
+## 📧 SISTEMA DE VERIFICACIÓN POR EMAIL
+
+### 📋 **Descripción**
+
+Sistema completo de verificación de cuentas por email con código de 6 dígitos que expira en 24 horas.  
+**Basado en el sistema funcional de MemoFlip.**
+
+---
+
+### 🗄️ **1. Cambios en la Base de Datos**
+
+#### **Archivo:** `lumetrix/agregar_verificacion_email.sql`
+
+```sql
+-- Agregar columnas para verificación por email
+ALTER TABLE usuarios_aplicaciones 
+ADD COLUMN IF NOT EXISTS email_verificado TINYINT(1) DEFAULT 0,
+ADD COLUMN IF NOT EXISTS codigo_verificacion VARCHAR(10) DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS tiempo_verificacion TIMESTAMP NULL DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS intentos_verificacion INT DEFAULT 0;
+
+-- Marcar usuarios existentes como verificados (migración)
+UPDATE usuarios_aplicaciones 
+SET email_verificado = 1 
+WHERE email_verificado = 0 AND fecha_registro < NOW();
+```
+
+#### **Ejecutar en Hostalia:**
+1. Acceder a phpMyAdmin
+2. Seleccionar la base de datos del proyecto
+3. Ejecutar el script SQL
+4. Verificar que las 4 columnas se crearon correctamente
+
+---
+
+### 📧 **2. Sistema de Envío de Emails**
+
+#### **Archivo:** `lumetrix/enviar_email.php`
+
+**Funciones disponibles:**
+
+##### `enviarEmailVerificacion($email, $nombre, $codigo)`
+- Envía email HTML con diseño Lumetrix (gradientes neón)
+- Template con código destacado en grande
+- Advertencia de expiración de 24 horas
+- Retorna `true` si el email se envió correctamente
+
+##### `generarCodigoVerificacion()`
+- Genera código aleatorio de 6 dígitos numéricos
+- Formato: `123456`
+
+##### `codigoEsValido($tiempo_verificacion, $horas_validez = 24)`
+- Verifica si un código ha expirado
+- Por defecto: 24 horas de validez
+
+##### `limpiarCodigosExpirados($pdo)`
+- Limpia códigos expirados de la base de datos
+- Ejecutar periódicamente con cron (opcional)
+
+---
+
+### 🔐 **3. API de Autenticación Actualizada**
+
+#### **Archivo:** `lumetrix/auth_con_verificacion.php`
+
+**Este archivo reemplaza a `auth.php` cuando quieras activar la verificación.**
+
+#### **Endpoints nuevos:**
+
+##### `POST auth.php?action=register`
+**Cambios:** Ahora genera código y envía email
+
+**Request:**
+```json
+{
+  "nombre": "Anabel",
+  "username": "anabel",
+  "email": "anabel@ejemplo.com",
+  "password": "mipassword"
+}
+```
+
+**Response (éxito):**
+```json
+{
+  "success": true,
+  "message": "Registro exitoso. Revisa tu email para el código de verificación.",
+  "requires_verification": true,
+  "email_sent": true,
+  "user_key": "anabel@ejemplo.com_lumetrix"
+}
+```
+
+**Response (desarrollo, sin email configurado):**
+```json
+{
+  "success": true,
+  "requires_verification": true,
+  "email_sent": false,
+  "codigo_dev": "123456"
+}
+```
+
+---
+
+##### `POST auth.php?action=verify_code`
+**Verifica el código introducido por el usuario**
+
+**Request:**
+```json
+{
+  "email": "anabel@ejemplo.com",
+  "codigo": "123456"
+}
+```
+
+**Response (éxito):**
+```json
+{
+  "success": true,
+  "message": "¡Cuenta verificada correctamente!",
+  "verified": true,
+  "user_key": "anabel@ejemplo.com_lumetrix"
+}
+```
+
+**Response (código incorrecto):**
+```json
+{
+  "success": false,
+  "error": "Código incorrecto"
+}
+```
+
+**Response (código expirado):**
+```json
+{
+  "success": false,
+  "error": "Código expirado. Solicita uno nuevo."
+}
+```
+
+---
+
+##### `POST auth.php?action=resend_code`
+**Reenvía un nuevo código al usuario**
+
+**Request:**
+```json
+{
+  "email": "anabel@ejemplo.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Código reenviado a tu email",
+  "email_sent": true
+}
+```
+
+---
+
+##### `POST auth.php?action=login`
+**MODIFICADO:** Ahora requiere email verificado
+
+**Request:** (sin cambios)
+```json
+{
+  "username": "anabel@ejemplo.com",
+  "password": "mipassword"
+}
+```
+
+**Response (email no verificado):**
+```json
+{
+  "success": false,
+  "message": "Debes verificar tu email antes de iniciar sesión",
+  "requires_verification": true,
+  "email": "anabel@ejemplo.com"
+}
+```
+
+**Response (login exitoso):**
+```json
+{
+  "success": true,
+  "user": {
+    "key": "anabel@ejemplo.com_lumetrix",
+    "nick": "anabel",
+    "email": "anabel@ejemplo.com",
+    "fecha_registro": "2025-01-15 10:30:00"
+  },
+  "progreso": {
+    "nivel_actual": 5,
+    "total_time_s": 1200
+  }
+}
+```
+
+---
+
+### 🔄 **4. Flujo Completo de Registro**
+
+```
+1. Usuario llena formulario de registro en la app
+   ↓
+2. App envía POST a auth.php?action=register
+   ↓
+3. Servidor genera código de 6 dígitos (ej: 834521)
+   ↓
+4. Código se guarda en BD (usuarios_aplicaciones.codigo_verificacion)
+   ↓
+5. Se envía email con código (subject: "🎮 Verifica tu cuenta de Lumetrix")
+   ↓
+6. Usuario recibe email y ve código en grande
+   ↓
+7. Usuario introduce código en la app
+   ↓
+8. App envía POST a auth.php?action=verify_code
+   ↓
+9. Servidor valida:
+   ✅ Código correcto
+   ✅ No expirado (< 24h)
+   ↓
+10. Usuario activado:
+    - activo = 1
+    - email_verificado = 1
+    - codigo_verificacion = NULL
+   ↓
+11. ¡Usuario puede hacer login!
+```
+
+---
+
+### 📊 **5. Estados de Usuario**
+
+| Estado | `activo` | `email_verificado` | ¿Puede login? | Notas |
+|--------|----------|-------------------|---------------|-------|
+| Recién registrado | 0 | 0 | ❌ No | Esperando verificación |
+| Email verificado | 1 | 1 | ✅ Sí | Cuenta activada |
+| Usuario antiguo* | 1 | 1 | ✅ Sí | Auto-verificado al ejecutar SQL |
+
+*Los usuarios existentes antes de activar este sistema se marcan automáticamente como verificados.
+
+---
+
+### 🚀 **6. Activar Verificación en Producción**
+
+#### **Paso 1: Ejecutar SQL**
+```bash
+# En phpMyAdmin de Hostalia
+1. Seleccionar base de datos
+2. Pestaña "SQL"
+3. Pegar contenido de: agregar_verificacion_email.sql
+4. Click "Continuar"
+5. Verificar mensaje: "4 columnas agregadas"
+```
+
+#### **Paso 2: Subir archivos PHP**
+```bash
+# Subir a Hostalia vía FTP/WinSCP
+/sistema_apps_upload/lumetrix/
+├── enviar_email.php (NUEVO)
+└── auth.php (REEMPLAZAR con auth_con_verificacion.php)
+```
+
+⚠️ **IMPORTANTE:** Hacer backup del `auth.php` original antes de reemplazarlo.
+
+#### **Paso 3: Verificar configuración de email**
+- Servidor SMTP debe estar configurado en Hostalia
+- Email `noreply@colisan.com` debe existir
+- Verificar que no se bloqueen emails como spam
+
+#### **Paso 4: Probar en desarrollo**
+```bash
+# Registro de prueba
+curl -X POST https://colisan.com/sistema_apps_upload/lumetrix/auth.php \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "register",
+    "nombre": "Test",
+    "username": "test",
+    "email": "test@ejemplo.com",
+    "password": "test123"
+  }'
+
+# Si email_sent: false → Usar codigo_dev de la respuesta
+# Si email_sent: true → Revisar bandeja de entrada
+```
+
+---
+
+### ⚙️ **7. Configuración Avanzada**
+
+#### **Cambiar tiempo de expiración:**
+```php
+// En enviar_email.php, línea ~67
+function codigoEsValido($tiempo_verificacion, $horas_validez = 24) {
+    // Cambiar 24 por las horas deseadas
+    // Ejemplos: 12 horas, 48 horas, etc.
+}
+```
+
+#### **Cambiar longitud del código:**
+```php
+// En enviar_email.php, línea ~58
+function generarCodigoVerificacion() {
+    // 6 dígitos (actual):
+    return str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
+    
+    // 4 dígitos:
+    // return str_pad(rand(1000, 9999), 4, '0', STR_PAD_LEFT);
+}
+```
+
+#### **Personalizar plantilla de email:**
+Editar `enviar_email.php` líneas 13-65 para cambiar:
+- Colores del email
+- Texto del mensaje
+- Logo/header
+- Footer
+
+---
+
+### 🔍 **8. Troubleshooting**
+
+#### **Email no se envía:**
+```bash
+# Verificar logs de PHP
+tail -f /ruta/a/php_error.log
+
+# Verificar que mail() funcione
+<?php
+$test = mail('tu@email.com', 'Test', 'Prueba');
+echo $test ? 'OK' : 'FAIL';
+?>
+```
+
+**Soluciones:**
+- Verificar configuración SMTP en Hostalia
+- Revisar carpeta de spam
+- Usar servicio externo (SendGrid, Mailgun, etc.)
+
+#### **Código no válido:**
+- Verificar que no hayan pasado 24 horas
+- Código es case-sensitive (solo números)
+- Revisar campo `codigo_verificacion` en BD
+
+#### **Usuario no puede hacer login:**
+```sql
+-- Verificar estado del usuario
+SELECT nick, email, activo, email_verificado, codigo_verificacion, tiempo_verificacion
+FROM usuarios_aplicaciones
+WHERE email = 'usuario@ejemplo.com';
+
+-- Si necesitas activar manualmente:
+UPDATE usuarios_aplicaciones
+SET activo = 1, email_verificado = 1
+WHERE email = 'usuario@ejemplo.com';
+```
+
+---
+
+### 📝 **9. Notas Importantes**
+
+⚠️ **Compatibilidad hacia atrás:**
+- Usuarios existentes se marcan automáticamente como verificados
+- No afecta a usuarios ya registrados
+- Sistema opcional: puedes activarlo cuando quieras
+
+⚠️ **Seguridad:**
+- Códigos válidos solo 24 horas
+- Se registran intentos fallidos
+- Posible mejora: limitar intentos (ej: 5 máximo)
+
+⚠️ **Modo desarrollo:**
+- Si email falla, código aparece en respuesta JSON
+- Solo para facilitar testing local
+- En producción con SMTP configurado no aparecerá
+
+---
+
+### ✅ **10. Checklist de Implementación**
+
+- [ ] Ejecutar SQL en Hostalia (agregar columnas)
+- [ ] Verificar que columnas se crearon correctamente
+- [ ] Hacer backup de `auth.php` original
+- [ ] Subir `enviar_email.php` a Hostalia
+- [ ] Reemplazar `auth.php` con `auth_con_verificacion.php`
+- [ ] Verificar configuración SMTP
+- [ ] Probar registro → ¿Llega email?
+- [ ] Probar código correcto → ¿Activa cuenta?
+- [ ] Probar código incorrecto → ¿Muestra error?
+- [ ] Probar código expirado (cambiar fecha en BD para testing)
+- [ ] Probar reenvío de código → ¿Llega nuevo email?
+- [ ] Probar login sin verificar → ¿Muestra error?
+- [ ] Probar login con email verificado → ¿Permite acceso?
+
+---
+
+### 🎨 **11. Template de Email (Vista Previa)**
+
+El email que recibe el usuario tiene:
+
+```
+┌─────────────────────────────────────┐
+│  🎮 LUMETRIX                        │
+│  Anti-Simon Challenge               │
+├─────────────────────────────────────┤
+│                                     │
+│  ¡Hola, Anabel!                     │
+│                                     │
+│  Gracias por registrarte en         │
+│  Lumetrix. Para activar tu cuenta,  │
+│  introduce el siguiente código:     │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │ TU CÓDIGO DE VERIFICACIÓN   │   │
+│  │                             │   │
+│  │      8 3 4 5 2 1           │   │
+│  │                             │   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  ⏱️ Expira en 24 horas              │
+│                                     │
+│  Si no solicitaste este código,     │
+│  ignora este email.                 │
+│                                     │
+│  © 2025 Lumetrix                    │
+└─────────────────────────────────────┘
+```
+
+**Colores:** Gradiente verde neón (#39ff14) y cian (#00e5ff) - Estilo Lumetrix
+
+---
+
 ## 🎯 Conclusión
 
 Sube solo la carpeta del juego. Las rutas deben apuntar a `/sistema_apps_upload/<juego>/`. Las tablas se enlazan con `usuarios_aplicaciones` mediante `usuario_aplicacion_key`. 
 
-**Con este código funcional de Lumetrix, todos los proyectos se desplegarán sin duplicar carpetas ni romper rutas, con funcionalidad completa de usuarios, sesiones, offline/online y audio.**
+**Con este código funcional de Lumetrix, todos los proyectos se desplegarán sin duplicar carpetas ni romper rutas, con funcionalidad completa de usuarios, sesiones, offline/online, audio y verificación por email.**
 
 **¡Listo para usar en cualquier proyecto nuevo!** 🚀
