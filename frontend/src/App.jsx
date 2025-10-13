@@ -488,7 +488,13 @@ function Intro({ onPlay, onAuth }){
   const [authChecking, setAuthChecking] = useState(true);
   
   // 🔐 VERIFICAR SESIÓN AL CARGAR (igual que MemoFlip)
+  const hasCheckedRef = useRef(false);
+  
   useEffect(() => {
+    // Evitar múltiples llamadas
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
+    
     checkSession();
   }, []);
   
@@ -760,21 +766,30 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const accent = useMemo(()=> colorForLevel(level), [level]);
 
   // Inicializar audios al cargar (SOLO UNA VEZ al montar)
+  const audioInitializedRef = useRef(false);
+  
   useEffect(() => {
+    if (audioInitializedRef.current) return;
+    audioInitializedRef.current = true;
+    
     SFX.initBg();
     SFX.initStart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ Array vacío = solo una vez al montar
 
   // Controlar música de fondo cuando cambie el estado
+  const musicStartedRef = useRef(false);
+  
   useEffect(() => {
-    if (musicOn) {
+    if (musicOn && !musicStartedRef.current) {
+      musicStartedRef.current = true;
       // Pequeño delay para asegurar que el audio esté listo
       const timer = setTimeout(() => {
         SFX.startBg(true);
       }, 500);
       return () => clearTimeout(timer);
-    } else {
+    } else if (!musicOn && musicStartedRef.current) {
+      musicStartedRef.current = false;
       SFX.stopBg();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
