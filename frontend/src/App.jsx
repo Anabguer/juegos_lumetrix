@@ -237,65 +237,36 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
     try {
       const audio = new Audio(getAssetPath('lumetrix/audio/audiofondo.mp3'));
       audio.loop = true;
-      audio.volume = volume; // Volumen dinámico
-      audio.preload = 'auto'; // Precargar el audio completo
+      audio.volume = volume;
+      audio.preload = 'auto';
       
-      // FORZAR LOOP: Reiniciar manualmente cuando termine (Android WebView a veces ignora loop=true)
-      audio.addEventListener('ended', () => {
-        console.log('🔁 Audio terminado, reiniciando loop manual...');
-        audio.currentTime = 0;
-        if (musicOn) {
-          audio.play().catch(e => console.log('❌ Error reiniciando audio:', e));
-        }
-      });
+      // Audio configurado para funcionamiento natural
 
-      // Monitorear si el audio se detiene inesperadamente
-      audio.addEventListener('pause', () => {
-        console.log('⏸️ Audio pausado. Paused:', audio.paused, 'Ended:', audio.ended, 'CurrentTime:', audio.currentTime);
-      });
-
-      // 🔧 FIX ANDROID: Monitorear constantemente si el audio se corta
-      const keepAliveInterval = setInterval(() => {
-        if (musicOn && bgAudioRef.current && bgAudioRef.current.paused && !bgAudioRef.current.ended) {
-          console.log('🚨 Audio pausado inesperadamente, reactivando...');
-          bgAudioRef.current.play().catch(e => console.log('❌ Error reactivando:', e));
-        }
-      }, 2000); // Verificar cada 2 segundos
-
-      // Guardar el intervalo para limpiarlo después
-      audio.dataset.keepAliveInterval = keepAliveInterval;
-      
       bgAudioRef.current = audio;
-      console.log('✅ Audio de fondo inicializado con keep-alive');
     } catch (e) {
-      console.log('❌ Error cargando audio de fondo:', e);
+      console.error('Error inicializando audio:', e);
     }
   };
 
   const startBgMusic = (musicEnabled = true) => {
     if (!musicEnabled || !bgAudioRef.current) return;
     try {
-      console.log('▶️ Iniciando música de fondo. Duration:', bgAudioRef.current.duration, 'Loop:', bgAudioRef.current.loop);
       bgAudioRef.current.play().catch(e => {
-        console.log('❌ Error reproduciendo audio de fondo:', e);
+        console.error('Error reproduciendo audio:', e);
       });
     } catch (e) {
-      console.log('❌ Excepción al iniciar música:', e);
+      console.error('Error iniciando música:', e);
     }
   };
 
   const stopBgMusic = () => {
     if (!bgAudioRef.current) return;
     try {
-      // Limpiar intervalo de keep-alive
-      const intervalId = bgAudioRef.current.dataset.keepAliveInterval;
-      if (intervalId) {
-        clearInterval(parseInt(intervalId));
-      }
-      
       bgAudioRef.current.pause();
       bgAudioRef.current.currentTime = 0;
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error parando música:', e);
+    }
   };
 
   const updateBgVolume = (newVolume) => {
@@ -336,13 +307,14 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
         appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
           if (bgAudioRef.current && bgAudioRef.current.src) {
             if (!isActive) {
-              // App en segundo plano → pausar
+              // App en segundo plano → pausar INTENCIONALMENTE
+              bgAudioRef.current.dataset.intentionalPause = 'true';
               bgAudioRef.current.pause();
-              console.log('🔇 Música pausada (app en segundo plano)');
+              console.log('🔇 [APP] Música pausada (app en segundo plano)');
             } else if (musicOn && bgAudioRef.current.paused) {
-              // App vuelve al primer plano → reanudar SOLO si estaba pausada
-              bgAudioRef.current.play().catch(e => console.log('Error reanudando música:', e));
-              console.log('🔊 Música reanudada (app activa)');
+              // App vuelve al primer plano → reanudar
+              bgAudioRef.current.play().catch(e => console.log('❌ [APP] Error reanudando música:', e));
+              console.log('🔊 [APP] Música reanudada (app activa)');
             }
           }
         });
@@ -510,16 +482,14 @@ function useLumetrixStyles(){
 }
 
 // ---------------- Intro ----------------
-function Intro({ onPlay, onAuth }){
+function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout }){
   const bgRef = useRef(null); const logoRef = useRef(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
   
   const handleLogout = async () => {
     try {
       await window.LUM_API.api('auth.php?action=logout');
-      setIsLoggedIn(false);
-      setUserInfo(null);
+      // Llamar al callback del padre para actualizar el estado global
+      if (onLogout) onLogout();
       window.location.reload();
     } catch (e) {
       console.log('Error al cerrar sesión');
@@ -570,26 +540,6 @@ function Intro({ onPlay, onAuth }){
     return ()=>clearInterval(t); 
   },[]);
   useEffect(()=>{ const fit=()=>{ const el=logoRef.current; if(!el) return; const panel=el.parentElement?.parentElement; if(!panel) return; el.style.fontSize=''; let size=Math.min(42, Math.max(28, Math.floor(panel.clientWidth*0.16))); el.style.fontSize=size+'px'; el.style.letterSpacing='0.16em'; let loops=0; while(el.scrollWidth>panel.clientWidth-24 && loops<20){ size-=1; el.style.fontSize=size+'px'; loops++; } }; fit(); const ro=new ResizeObserver(fit); ro.observe(document.body); return ()=>ro.disconnect(); },[]);
-  
-  // Verificar estado de autenticación al cargar
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        if (window.LUM_API && window.LUM_API.api) {
-          const result = await window.LUM_API.api('auth.php?action=check_session');
-          if (result && result.success) {
-            setIsLoggedIn(true);
-            setUserInfo(result.user);
-          }
-        }
-      } catch (e) {
-        console.log('No hay sesión activa');
-        setIsLoggedIn(false);
-        setUserInfo(null);
-      }
-    };
-    checkAuth();
-  }, []);
   return (
     <section className="screen intro">
       <div className="introWrap">
@@ -651,7 +601,7 @@ function Intro({ onPlay, onAuth }){
 }
 
 // ---------------- Game ----------------
-function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel }){
+function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus }){
   const boardRef = useRef(null);
   const [time, setTime] = useState(timeFor(level));
   const [running, setRunning] = useState(false);
@@ -749,31 +699,32 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const levelInWorld = ((level-1)%10) + 1;
   const accent = useMemo(()=> colorForLevel(level), [level]);
 
-  // Inicializar audios al cargar
+  // Inicializar audios al cargar (SOLO UNA VEZ al montar)
   useEffect(() => {
     SFX.initBg();
     SFX.initStart();
-    // Iniciar música de fondo después de un pequeño delay (solo si está habilitada)
-    const timer = setTimeout(() => {
-      SFX.startBg(musicOn);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [SFX, musicOn]);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ Array vacío = solo una vez al montar
 
   // Controlar música de fondo cuando cambie el estado
   useEffect(() => {
     if (musicOn) {
-      SFX.startBg(true);
+      // Pequeño delay para asegurar que el audio esté listo
+      const timer = setTimeout(() => {
+        SFX.startBg(true);
+      }, 500);
+      return () => clearTimeout(timer);
     } else {
       SFX.stopBg();
     }
-  }, [musicOn, SFX]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicOn]); // ✅ Solo cuando cambia musicOn (no SFX)
 
   // Actualizar volumen cuando cambie
   useEffect(() => {
     SFX.updateVolume(musicVolume);
-  }, [musicVolume, SFX]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicVolume]); // ✅ Solo cuando cambia musicVolume (no SFX)
 
   // Función para actualizar zonas de drop
   const updateDropZones = () => {
@@ -1120,19 +1071,19 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               levelWonRef.current = true; // Marcar que ya ganamos este nivel
             }
             
-            // Solo guardar en servidor si hay sesión activa
-            if (window.LUM_API && window.currentUser) {
-              window.LUM_API.api('game.php?action=save_progress', {
-                method: 'POST',
-                body: JSON.stringify({
-                  level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
-                  total_time_s: spent,
-                  puntos: puntos,
-                  success: 1
-                })
-              }).catch(e => {
-                console.log('Error guardando progreso:', e);
-              });
+            // 🔥 GUARDAR PROGRESO: Local primero (siempre), luego servidor (si hay conexión)
+            const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
+            const tiempoAGuardar = spent;
+            const puntosAGuardar = puntos;
+            
+            // 1️⃣ Guardar LOCAL (siempre, funciona offline)
+            if (typeof onLocalProgressSave === 'function') {
+              onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+            }
+            
+            // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
+            if (typeof onSyncToServer === 'function') {
+              onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
             }
           }
         } catch (_) {}
@@ -1491,20 +1442,16 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
           saveTotal(spent);
           
-          // Al PERDER (tiempo agotado): guardar progreso en API (solo si hay sesión)
+          // 🔥 Al PERDER (tiempo agotado): guardar progreso local y servidor
           try {
-            if (window.LUM_API && window.currentUser) {
-              window.LUM_API.api('game.php?action=save_progress', {
-                method: 'POST',
-                body: JSON.stringify({
-                  level,
-                  total_time_s: spent,
-                  puntos: 0, // No hay puntos al perder
-                  success: 0
-                })
-              }).catch(e => {
-                console.log('Error guardando progreso:', e);
-              });
+            // 1️⃣ Guardar LOCAL (siempre)
+            if (typeof onLocalProgressSave === 'function') {
+              onLocalProgressSave(level, spent, 0); // Sin puntos al perder
+            }
+            
+            // 2️⃣ Intentar guardar en SERVIDOR
+            if (typeof onSyncToServer === 'function') {
+              onSyncToServer(level, spent, 0);
             }
           } catch (_) {}
         }
@@ -1716,19 +1663,19 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                   levelWonRef.current = true; // Marcar que ya ganamos este nivel
                 }
                 
-                // Solo guardar en servidor si hay sesión activa
-                if (window.LUM_API && window.currentUser) {
-                  window.LUM_API.api('game.php?action=save_progress', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
-                      total_time_s: spent,
-                      puntos: puntos,
-                      success: 1
-                    })
-                  }).catch(e => {
-                    console.log('Error guardando progreso:', e);
-                  });
+                // 🔥 GUARDAR PROGRESO: Local primero (siempre), luego servidor (si hay conexión)
+                const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
+                const tiempoAGuardar = spent;
+                const puntosAGuardar = puntos;
+                
+                // 1️⃣ Guardar LOCAL (siempre, funciona offline)
+                if (typeof onLocalProgressSave === 'function') {
+                  onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+                }
+                
+                // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
+                if (typeof onSyncToServer === 'function') {
+                  onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
                 }
               }
             } catch (_) { /* opcional: mostrar un aviso suave */ }
@@ -1918,6 +1865,22 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           <span className="chip"><b>{totalPuntos}</b></span>
           {practiceModeLevel !== null && (
             <span className="chip" style={{background:'rgba(255,165,0,0.2)', border:'1px solid #ffa500', color:'#ffa500', fontSize:'11px'}}>PRÁCTICA</span>
+          )}
+          {/* 🔥 INDICADOR DE SINCRONIZACIÓN */}
+          {syncStatus === 'syncing' && (
+            <span className="chip" style={{background:'rgba(59,130,246,0.2)', border:'1px solid #3b82f6', color:'#3b82f6', fontSize:'10px', padding:'2px 8px'}} title="Sincronizando con servidor...">
+              ⟳ Sync
+            </span>
+          )}
+          {syncStatus === 'pending' && (
+            <span className="chip" style={{background:'rgba(234,179,8,0.2)', border:'1px solid #eab308', color:'#eab308', fontSize:'10px', padding:'2px 8px'}} title="Progreso pendiente de sincronizar">
+              ⏳ Pendiente
+            </span>
+          )}
+          {syncStatus === 'offline' && (
+            <span className="chip" style={{background:'rgba(156,163,175,0.2)', border:'1px solid #9ca3af', color:'#9ca3af', fontSize:'10px', padding:'2px 8px'}} title="Sin conexión - Trabajando offline">
+              📡 Offline
+            </span>
           )}
         </div>
       </div>
@@ -2229,38 +2192,53 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
   );
 }
 function Auth({ onClose }){
+  // ✅ CARGAR CREDENCIALES GUARDADAS AL INICIAR
+  const savedEmail = localStorage.getItem('lum_user_email') || '';
+  const savedToken = localStorage.getItem('lum_user_token') || '';
+  const savedPassword = savedToken ? atob(savedToken) : '';
+  
   const [mode, setMode] = useState('login'); // 'login' o 'register'
   const [username, setUsername] = useState('');
   const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(savedEmail); // ✅ Pre-rellenado
+  const [password, setPassword] = useState(savedPassword); // ✅ Pre-rellenado
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
 
-  // Verificar sesión al abrir modal
+  // ❌ AUTO-LOGIN DESHABILITADO EN INTRO - USAR EL DEL APP PRINCIPAL
+  // Este useEffect ya no es necesario porque el auto-login se maneja en el useEffect principal del App
+  /*
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        if (window.LUM_API && window.LUM_API.api) {
-          const result = await window.LUM_API.api('auth.php?action=check_session');
-          if (result && result.success) {
-            setIsLoggedIn(true);
-            setUserInfo(result.user);
-          }
-        }
-      } catch (e) {
-        setIsLoggedIn(false);
-      }
+      console.log('🔍 [AUTO-LOGIN INTRO] Iniciando verificación...');
+      // ... código comentado ...
     };
     checkAuth();
   }, []);
+  */
+
+  // ✅ El auto-login ahora se maneja en el useEffect principal del App (líneas 2739+)
+  // Los props isLoggedIn y userInfo se reciben directamente del componente App padre
+  
+  useEffect(() => {
+    // Log para debug: verificar que los props se reciben correctamente
+    if (isLoggedIn && userInfo) {
+      console.log('✅ [INTRO] Props recibidos:', { isLoggedIn, nick: userInfo.nick });
+    }
+  }, [isLoggedIn, userInfo]);
 
   const handleLogout = async () => {
     setLoading(true);
     try {
       await window.LUM_API.api('auth.php?action=logout');
+      
+      // ✅ LIMPIAR CREDENCIALES GUARDADAS
+      localStorage.removeItem('lum_user_email');
+      localStorage.removeItem('lum_user_token');
+      console.log('🔓 Credenciales eliminadas');
+      
       window.location.reload();
     } catch (e) {
       setMessage('❌ Error al cerrar sesión');
@@ -2313,6 +2291,15 @@ function Auth({ onClose }){
       });
       
       if (result.success) {
+        // ✅ GUARDAR CREDENCIALES EN LOCALSTORAGE para auto-login
+        try {
+          localStorage.setItem('lum_user_email', email);
+          localStorage.setItem('lum_user_token', btoa(password)); // Codificado en base64 (básico)
+          console.log('✅ Credenciales guardadas para auto-login');
+        } catch (e) {
+          console.log('⚠️ No se pudieron guardar credenciales:', e);
+        }
+        
         setMessage('✅ ¡Bienvenido!');
         setTimeout(() => {
           window.location.reload(); // Recargar para actualizar estado
@@ -2618,36 +2605,258 @@ export default function App(){
   const [musicOn, setMusicOn] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.15); // Volumen inicial más alto
   const [vibrateOn, setVibrateOn] = useState(true);
-  const [level, setLevel] = useState(1);
-  const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
-  const [totalPuntos, setTotalPuntos] = useState(0);
-  const [showLevelSelector, setShowLevelSelector] = useState(false);
-  const [currentLevel, setCurrentLevel] = useState(1); // Nivel actual de progreso
-  const [practiceModeLevel, setPracticeModeLevel] = useState(null); // Nivel en modo práctica
+  // 🔥 SISTEMA HÍBRIDO OFFLINE/ONLINE - Almacenamiento local
+  const getLocalProgress = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        return {
+          nivel_actual: data.nivel_actual || 1,
+          total_time_s: data.total_time_s || 0,
+          total_puntos: data.total_puntos || 0,
+          last_sync: data.last_sync || null
+        };
+      }
+    } catch (e) {
+      console.log('Error leyendo progreso local:', e);
+    }
+    return { nivel_actual: 1, total_time_s: 0, total_puntos: 0, last_sync: null };
+  };
 
-  // Cargar nivel guardado desde API al iniciar
+  const saveLocalProgress = (nivel, tiempo, puntos) => {
+    try {
+      const data = {
+        nivel_actual: nivel,
+        total_time_s: tiempo,
+        total_puntos: puntos,
+        last_sync: new Date().toISOString(),
+        pending_sync: false
+      };
+      localStorage.setItem('lum_progress_offline', JSON.stringify(data));
+      console.log('✅ Progreso guardado localmente:', data);
+    } catch (e) {
+      console.log('❌ Error guardando progreso local:', e);
+    }
+  };
+
+  const markPendingSync = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        data.pending_sync = true;
+        localStorage.setItem('lum_progress_offline', JSON.stringify(data));
+        console.log('⏳ Progreso marcado como pendiente de sincronización');
+      }
+    } catch (e) {
+      console.log('Error marcando pending_sync:', e);
+    }
+  };
+
+  const getPendingSyncStatus = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        return data.pending_sync || false;
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // 🔥 Estados para el sistema híbrido
+  const [level, setLevel] = useState(() => getLocalProgress().nivel_actual);
+  const [totalTime, setTotalTime] = useState(() => getLocalProgress().total_time_s);
+  const [totalPuntos, setTotalPuntos] = useState(() => getLocalProgress().total_puntos);
+  const [showLevelSelector, setShowLevelSelector] = useState(false);
+  const [currentLevel, setCurrentLevel] = useState(() => getLocalProgress().nivel_actual);
+  const [practiceModeLevel, setPracticeModeLevel] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'pending' | 'offline' | 'syncing'
+  
+  // 🔐 Estados de autenticación
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+
+  // 🔥 MERGE INTELIGENTE: Local vs Servidor
+  const mergeProgress = (local, server) => {
+    const merged = {
+      nivel_actual: Math.max(local.nivel_actual || 1, server.nivel_actual || 1),
+      total_time_s: Math.max(local.total_time_s || 0, server.total_time_s || 0),
+      total_puntos: Math.max(local.total_puntos || 0, server.total_puntos || 0)
+    };
+    console.log('🔀 Merge progreso:', { local, server, merged });
+    return merged;
+  };
+
+  // 🔥 CARGAR PROGRESO: Primero local (instantáneo), luego merge con servidor
   useEffect(() => {
     const loadProgress = async () => {
+      // Pequeño delay para asegurar que el componente esté completamente montado
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 1️⃣ Cargar LOCAL primero (instantáneo, funciona offline)
+      const localProgress = getLocalProgress();
+      setLevel(localProgress.nivel_actual);
+      setCurrentLevel(localProgress.nivel_actual);
+      setTotalTime(localProgress.total_time_s);
+      setTotalPuntos(localProgress.total_puntos);
+      console.log('📱 Progreso local cargado:', localProgress);
+
+      // 2️⃣ AUTO-LOGIN Y MERGE CON SERVIDOR
       try {
         if (window.LUM_API && window.LUM_API.api) {
+          console.log('🔍 [AUTO-LOGIN] Verificando sesión activa...');
+          // ✅ VERIFICAR SESIÓN ACTIVA
           const result = await window.LUM_API.api('auth.php?action=check_session');
+          console.log('🔍 [AUTO-LOGIN] Resultado check_session:', result);
+          
           if (result && result.success) {
-            // Cargar progreso del usuario
+            // ✅ Hay sesión activa
+            console.log('✅ [AUTO-LOGIN] Sesión activa encontrada:', result.user?.nick);
+            setIsLoggedIn(true);
+            setUserInfo(result.user);
+            setSyncStatus('syncing');
             const progreso = await window.LUM_API.api('game.php?action=get_progress');
+            
             if (progreso && progreso.success && progreso.data) {
-              const savedLevel = progreso.data.nivel_actual || 1;
-              const savedTime = progreso.data.total_time_s || 0;
-              const savedPuntos = progreso.data.total_puntos || 0;
-              setLevel(savedLevel);
-              setCurrentLevel(savedLevel);
-              setTotalTime(savedTime);
-              setTotalPuntos(savedPuntos);
-              console.log(`Progreso cargado: Nivel ${savedLevel}, Tiempo ${savedTime}s, Puntos ${savedPuntos}`);
+              const serverProgress = {
+                nivel_actual: progreso.data.nivel_actual || 1,
+                total_time_s: progreso.data.total_time_s || 0,
+                total_puntos: progreso.data.total_puntos || 0
+              };
+              
+              // 🔀 MERGE: El más avanzado gana
+              const merged = mergeProgress(localProgress, serverProgress);
+              
+              // Actualizar estados con progreso mergeado
+              setLevel(merged.nivel_actual);
+              setCurrentLevel(merged.nivel_actual);
+              setTotalTime(merged.total_time_s);
+              setTotalPuntos(merged.total_puntos);
+              
+              // Guardar merge localmente
+              saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+              
+              // Si hay cambios, sincronizar al servidor
+              if (JSON.stringify(merged) !== JSON.stringify(serverProgress)) {
+                console.log('📤 Sincronizando progreso mergeado al servidor...');
+                await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+              }
+              
+            setSyncStatus('synced');
+            console.log('✅ Progreso sincronizado correctamente');
+          } else {
+            setSyncStatus('synced');
+          }
+        } else {
+          // ❌ No hay sesión → Intentar AUTO-LOGIN
+          console.log('🔍 [AUTO-LOGIN] Sin sesión activa, buscando credenciales...');
+          const savedEmail = localStorage.getItem('lum_user_email');
+          const savedToken = localStorage.getItem('lum_user_token');
+          
+          console.log('🔍 [AUTO-LOGIN] Credenciales encontradas:', {
+            email: savedEmail ? 'SÍ' : 'NO',
+            token: savedToken ? 'SÍ' : 'NO'
+          });
+          
+          if (savedEmail && savedToken) {
+            console.log('🔑 [AUTO-LOGIN] Intentando auto-login...');
+            try {
+              const savedPassword = atob(savedToken);
+              console.log('🔍 [AUTO-LOGIN] Password decodificado:', savedPassword ? 'SÍ' : 'NO');
+              
+              const loginResult = await window.LUM_API.api('auth.php?action=login', {
+                method: 'POST',
+                body: JSON.stringify({ username: savedEmail, password: savedPassword })
+              });
+              
+              console.log('🔍 [AUTO-LOGIN] Resultado login:', loginResult);
+              
+              if (loginResult && loginResult.success) {
+                console.log('✅ [AUTO-LOGIN] Auto-login exitoso!');
+                setIsLoggedIn(true);
+                setUserInfo(loginResult.user);
+                console.log('✅ [AUTO-LOGIN] Estados actualizados:', { isLoggedIn: true, user: loginResult.user?.nick });
+                
+                // 🔄 Cargar progreso del servidor y hacer MERGE
+                setSyncStatus('syncing');
+                const progreso = await window.LUM_API.api('game.php?action=get_progress');
+                if (progreso && progreso.success && progreso.data) {
+                  const serverProgress = {
+                    nivel_actual: progreso.data.nivel_actual || 1,
+                    total_time_s: progreso.data.total_time_s || 0,
+                    total_puntos: progreso.data.total_puntos || 0
+                  };
+                  
+                  // 🔀 MERGE INTELIGENTE: Local vs Servidor
+                  const merged = mergeProgress(localProgress, serverProgress);
+                  console.log('📊 [AUTO-LOGIN] Merge progreso:', { 
+                    local: localProgress, 
+                    servidor: serverProgress, 
+                    final: merged 
+                  });
+                  
+                  // ✅ Aplicar progreso mergeado
+                  setLevel(merged.nivel_actual);
+                  setCurrentLevel(merged.nivel_actual);
+                  setTotalTime(merged.total_time_s);
+                  setTotalPuntos(merged.total_puntos);
+                  saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+                  
+                  // 📤 Si el progreso local es mayor, sincronizar al servidor
+                  if (merged.nivel_actual > serverProgress.nivel_actual || 
+                      merged.total_time_s > serverProgress.total_time_s || 
+                      merged.total_puntos > serverProgress.total_puntos) {
+                    console.log('📤 [AUTO-LOGIN] Progreso local más avanzado, sincronizando al servidor...');
+                    await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+                  } else {
+                    setSyncStatus('synced');
+                  }
+                } else {
+                  setSyncStatus('synced');
+                }
+              } else {
+                // 🔍 Diferenciar entre error de credenciales y error de red
+                const errorMsg = loginResult?.message || '';
+                const isCredentialError = errorMsg.includes('inválidas') || errorMsg.includes('incorrectas') || errorMsg.includes('no encontrado');
+                
+                if (isCredentialError) {
+                  console.log('⚠️ [AUTO-LOGIN] Credenciales inválidas, limpiando...');
+                  localStorage.removeItem('lum_user_email');
+                  localStorage.removeItem('lum_user_token');
+                } else {
+                  console.log('⚠️ [AUTO-LOGIN] Error temporal (red/servidor), manteniendo credenciales para reintentar');
+                }
+                
+                setIsLoggedIn(false);
+                setSyncStatus('offline');
+              }
+            } catch (e) {
+              console.log('❌ [AUTO-LOGIN] Error en auto-login (red/servidor):', e);
+              console.log('📝 [AUTO-LOGIN] Manteniendo credenciales para reintentar más tarde');
+              // NO borrar credenciales en caso de error de red
+              // El usuario puede reintentar recargando la app cuando tenga internet
+              setIsLoggedIn(false);
+              setSyncStatus('offline');
             }
+          } else {
+            console.log('🔓 [AUTO-LOGIN] No hay credenciales guardadas, trabajando offline');
+            setIsLoggedIn(false);
+            setSyncStatus('offline');
           }
         }
+      } else {
+        setSyncStatus('offline');
+      }
       } catch (e) {
-        console.log('Sin progreso guardado, empezando desde nivel 1');
+        setSyncStatus('offline');
+        console.log('⚠️ Error cargando del servidor, trabajando offline:', e);
+        
+        // Si hay progreso pendiente de sincronizar, marcarlo
+        if (getPendingSyncStatus()) {
+          setSyncStatus('pending');
+        }
       }
     };
     loadProgress();
@@ -2655,7 +2864,197 @@ export default function App(){
 
   useEffect(()=>{ 
     window.LumetrixTest = Object.assign({}, window.LumetrixTest, { help:'LumetrixTest.start(), .tapExpected(), .state() — tras pulsar Jugar' }); 
-  }, []);
+    
+    // 🔍 DEBUG: Función para ver estado de auto-login
+    window.LUM_DEBUG = {
+      checkAuth: () => {
+        const email = localStorage.getItem('lum_user_email');
+        const token = localStorage.getItem('lum_user_token');
+        console.log('📊 Estado de Autenticación:', {
+          email: email || '❌ No guardado',
+          token: token ? '✅ Guardado' : '❌ No guardado',
+          password: token ? atob(token) : '❌ No disponible',
+          isLoggedIn: isLoggedIn,
+          userInfo: userInfo
+        });
+        return { email, token: token ? atob(token) : null, isLoggedIn, userInfo };
+      },
+      clearAuth: () => {
+        localStorage.removeItem('lum_user_email');
+        localStorage.removeItem('lum_user_token');
+        console.log('✅ Credenciales eliminadas');
+      }
+    };
+  }, [isLoggedIn, userInfo]);
+
+  // 🔐 LOGOUT: Cerrar sesión y limpiar credenciales
+  const handleLogout = async () => {
+    try {
+      if (window.LUM_API && window.LUM_API.api) {
+        await window.LUM_API.api('auth.php?action=logout');
+      }
+      
+      // Limpiar credenciales guardadas
+      localStorage.removeItem('lum_user_email');
+      localStorage.removeItem('lum_user_token');
+      console.log('🔓 Sesión cerrada y credenciales eliminadas');
+      
+      // Actualizar estados
+      setIsLoggedIn(false);
+      setUserInfo(null);
+      
+      // Recargar para limpiar todo
+      window.location.reload();
+    } catch (e) {
+      console.log('❌ Error al cerrar sesión:', e);
+    }
+  };
+
+  // 🔥 SINCRONIZAR AL SERVIDOR (con manejo de errores)
+  const syncToServer = async (nivel, tiempo, puntos) => {
+    try {
+      if (!window.LUM_API || !window.currentUser) {
+        console.log('⚠️ No hay sesión activa, no se puede sincronizar');
+        markPendingSync();
+        setSyncStatus('pending');
+        return false;
+      }
+
+      setSyncStatus('syncing');
+      const result = await window.LUM_API.api('game.php?action=save_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          level: nivel,
+          total_time_s: tiempo,
+          puntos: puntos,
+          success: 1
+        })
+      });
+
+      if (result && result.success) {
+        console.log('✅ Progreso sincronizado al servidor');
+        setSyncStatus('synced');
+        
+        // Actualizar local con pending_sync = false
+        saveLocalProgress(nivel, tiempo, puntos);
+        return true;
+      } else {
+        console.log('❌ Error al sincronizar:', result?.message);
+        markPendingSync();
+        setSyncStatus('pending');
+        return false;
+      }
+    } catch (e) {
+      console.log('❌ Error de red al sincronizar:', e);
+      markPendingSync();
+      setSyncStatus('pending');
+      return false;
+    }
+  };
+
+  // 🔥 AUTO-RETRY: Intentar auto-login y sincronizar cuando vuelve internet
+  const checkAndRetrySync = useCallback(async () => {
+    console.log('🔄 [AUTO-RETRY] Ejecutando checkAndRetrySync...', { 
+      isOnline: navigator.onLine, 
+      isLoggedIn 
+    });
+    
+    if (!navigator.onLine) {
+      console.log('⚠️ [AUTO-RETRY] Sin conexión, saliendo...');
+      return;
+    }
+    
+    // 1️⃣ Si NO está logueado pero HAY credenciales → Reintentar auto-login
+    if (!isLoggedIn) {
+      const savedEmail = localStorage.getItem('lum_user_email');
+      const savedToken = localStorage.getItem('lum_user_token');
+      
+      console.log('🔍 [AUTO-RETRY] Estado:', {
+        email: savedEmail ? 'SÍ' : 'NO',
+        token: savedToken ? 'SÍ' : 'NO',
+        api: window.LUM_API ? 'SÍ' : 'NO'
+      });
+      
+      if (savedEmail && savedToken && window.LUM_API && window.LUM_API.api) {
+        console.log('🔄 [AUTO-RETRY] Detectado internet, reintentando auto-login...');
+        try {
+          const savedPassword = atob(savedToken);
+          const loginResult = await window.LUM_API.api('auth.php?action=login', {
+            method: 'POST',
+            body: JSON.stringify({ username: savedEmail, password: savedPassword })
+          });
+          
+          console.log('📊 [AUTO-RETRY] Resultado:', loginResult);
+          
+          if (loginResult && loginResult.success) {
+            console.log('✅ [AUTO-RETRY] Auto-login exitoso!');
+            setIsLoggedIn(true);
+            setUserInfo(loginResult.user);
+            
+            // Cargar y mergear progreso
+            const localProgress = getLocalProgress();
+            const progreso = await window.LUM_API.api('game.php?action=get_progress');
+            if (progreso && progreso.success && progreso.data) {
+              const serverProgress = {
+                nivel_actual: progreso.data.nivel_actual || 1,
+                total_time_s: progreso.data.total_time_s || 0,
+                total_puntos: progreso.data.total_puntos || 0
+              };
+              
+              const merged = mergeProgress(localProgress, serverProgress);
+              setLevel(merged.nivel_actual);
+              setCurrentLevel(merged.nivel_actual);
+              setTotalTime(merged.total_time_s);
+              setTotalPuntos(merged.total_puntos);
+              saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+              
+              // Sincronizar si local > servidor
+              if (merged.nivel_actual > serverProgress.nivel_actual || 
+                  merged.total_time_s > serverProgress.total_time_s || 
+                  merged.total_puntos > serverProgress.total_puntos) {
+                await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
+              }
+              setSyncStatus('synced');
+            }
+          }
+        } catch (e) {
+          console.log('⚠️ [AUTO-RETRY] Error al reintentar auto-login:', e);
+        }
+      } else {
+        console.log('⚠️ [AUTO-RETRY] No hay credenciales o API no disponible');
+      }
+    } else {
+      console.log('✅ [AUTO-RETRY] Ya está logueado, saltando auto-login');
+    }
+    
+    // 2️⃣ Si hay progreso pendiente de sincronizar → Sincronizar
+    if (getPendingSyncStatus() && isLoggedIn) {
+      console.log('🔄 Detectado internet, intentando sincronizar progreso pendiente...');
+      const localProgress = getLocalProgress();
+      const success = await syncToServer(
+        localProgress.nivel_actual,
+        localProgress.total_time_s,
+        localProgress.total_puntos
+      );
+      
+      if (success) {
+        console.log('✅ Sincronización pendiente completada');
+      }
+    }
+  }, [isLoggedIn]); // Solo dependemos de isLoggedIn para minimizar re-renders
+
+  useEffect(() => {
+    // Escuchar cambios de conectividad
+    window.addEventListener('online', checkAndRetrySync);
+    
+    // También verificar periódicamente cada 30 segundos
+    const interval = setInterval(checkAndRetrySync, 30000);
+
+    return () => {
+      window.removeEventListener('online', checkAndRetrySync);
+      clearInterval(interval);
+    };
+  }, [checkAndRetrySync]);
 
   // Pausar/reanudar música cuando la app va a segundo plano
   // El control de visibilidad de la música ahora está en el hook useSFX
@@ -2670,7 +3069,13 @@ export default function App(){
     <div className="shell">
       <div className="device">
         {screen==='intro' ? (
-          <Intro onPlay={()=>setScreen('game')} onAuth={()=>setShowAuth(true)} />
+          <Intro 
+            onPlay={()=>setScreen('game')} 
+            onAuth={()=>setShowAuth(true)} 
+            isLoggedIn={isLoggedIn} 
+            userInfo={userInfo}
+            onLogout={handleLogout}
+          />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
                 onOpenAuth={()=>setShowAuth(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
@@ -2678,7 +3083,10 @@ export default function App(){
                 onTotalUpdate={setTotalTime} totalTime={totalTime} onPuntosUpdate={setTotalPuntos} totalPuntos={totalPuntos}
                 practiceModeLevel={practiceModeLevel} currentLevel={currentLevel}
                 onExitPracticeMode={()=>setPracticeModeLevel(null)}
-                onUpdateCurrentLevel={setCurrentLevel} />
+                onUpdateCurrentLevel={setCurrentLevel}
+                onLocalProgressSave={saveLocalProgress}
+                onSyncToServer={syncToServer}
+                syncStatus={syncStatus} />
         )}
 
         {showRanking && <Ranking onClose={()=>setShowRanking(false)} total={totalTime} />}
