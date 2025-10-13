@@ -482,7 +482,7 @@ function useLumetrixStyles(){
 }
 
 // ---------------- Intro ----------------
-function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout }){
+function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout, authChecking }){
   const bgRef = useRef(null); const logoRef = useRef(null);
   
   const handleLogout = async () => {
@@ -562,7 +562,12 @@ function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout }){
           </h1>
           <div style={{textAlign:'center',fontSize:18,opacity:.9,marginTop:20,marginBottom:8,lineHeight:'1.4',fontWeight:500}}>Esto no es un Simón: es el <b>anti‑Simón</b>.<br/><br/><b>Encuentra</b> la secuencia y pinta <b>todas</b> las piezas del color del borde.</div>
           
-          {isLoggedIn ? (
+          {authChecking ? (
+            // Verificando autenticación - mostrar spinner
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div style={{fontSize:14,opacity:0.7,color:'#39ff14'}}>Verificando sesión...</div>
+            </div>
+          ) : isLoggedIn ? (
             // Usuario logueado - mostrar progreso guardado
             <div style={{textAlign:'center',marginTop:20}}>
               <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:16}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
@@ -2677,6 +2682,7 @@ export default function App(){
   // 🔐 Estados de autenticación
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true); // Estado de "verificando autenticación"
 
   // 🔥 MERGE INTELIGENTE: Local vs Servidor
   const mergeProgress = (local, server) => {
@@ -2692,9 +2698,6 @@ export default function App(){
   // 🔥 CARGAR PROGRESO: Primero local (instantáneo), luego merge con servidor
   useEffect(() => {
     const loadProgress = async () => {
-      // Pequeño delay para asegurar que el componente esté completamente montado
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
       // 1️⃣ Cargar LOCAL primero (instantáneo, funciona offline)
       const localProgress = getLocalProgress();
       setLevel(localProgress.nivel_actual);
@@ -2707,6 +2710,11 @@ export default function App(){
       try {
         if (window.LUM_API && window.LUM_API.api) {
           console.log('🔍 [AUTO-LOGIN] Verificando sesión activa...');
+          console.log('📧 [AUTO-LOGIN] Credenciales guardadas:', {
+            email: localStorage.getItem('lum_user_email'),
+            token: localStorage.getItem('lum_user_token') ? 'SÍ' : 'NO'
+          });
+          
           // ✅ VERIFICAR SESIÓN ACTIVA
           const result = await window.LUM_API.api('auth.php?action=check_session');
           console.log('🔍 [AUTO-LOGIN] Resultado check_session:', result);
@@ -2716,6 +2724,7 @@ export default function App(){
             console.log('✅ [AUTO-LOGIN] Sesión activa encontrada:', result.user?.nick);
             setIsLoggedIn(true);
             setUserInfo(result.user);
+            setAuthChecking(false);
             setSyncStatus('syncing');
             const progreso = await window.LUM_API.api('game.php?action=get_progress');
             
@@ -2777,6 +2786,7 @@ export default function App(){
                 console.log('✅ [AUTO-LOGIN] Auto-login exitoso!');
                 setIsLoggedIn(true);
                 setUserInfo(loginResult.user);
+                setAuthChecking(false);
                 console.log('✅ [AUTO-LOGIN] Estados actualizados:', { isLoggedIn: true, user: loginResult.user?.nick });
                 
                 // 🔄 Cargar progreso del servidor y hacer MERGE
@@ -2830,6 +2840,7 @@ export default function App(){
                 }
                 
                 setIsLoggedIn(false);
+                setAuthChecking(false);
                 setSyncStatus('offline');
               }
             } catch (e) {
@@ -2838,18 +2849,22 @@ export default function App(){
               // NO borrar credenciales en caso de error de red
               // El usuario puede reintentar recargando la app cuando tenga internet
               setIsLoggedIn(false);
+              setAuthChecking(false);
               setSyncStatus('offline');
             }
           } else {
             console.log('🔓 [AUTO-LOGIN] No hay credenciales guardadas, trabajando offline');
             setIsLoggedIn(false);
+            setAuthChecking(false);
             setSyncStatus('offline');
           }
         }
       } else {
+        setAuthChecking(false);
         setSyncStatus('offline');
       }
       } catch (e) {
+        setAuthChecking(false);
         setSyncStatus('offline');
         console.log('⚠️ Error cargando del servidor, trabajando offline:', e);
         
@@ -3075,6 +3090,7 @@ export default function App(){
             isLoggedIn={isLoggedIn} 
             userInfo={userInfo}
             onLogout={handleLogout}
+            authChecking={authChecking}
           />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
