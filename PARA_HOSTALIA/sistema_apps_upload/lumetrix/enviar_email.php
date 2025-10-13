@@ -1,119 +1,192 @@
 <?php
 /**
- * SISTEMA DE ENVÍO DE EMAILS - LUMETRIX
- * Gestión de verificación de cuentas por email
+ * Sistema de envío de emails para verificación de cuentas - LUMETRIX
+ * Basado en el sistema de MemoFlip
  */
 
-/**
- * Enviar email de verificación con código de 6 dígitos
- */
 function enviarEmailVerificacion($email, $nombre, $codigo) {
-    $asunto = "🎮 Verifica tu cuenta de Lumetrix";
+    $asunto = "🔐 Verifica tu cuenta en LUMETRIX";
     
-    $mensaje = "
+    $html = '
     <!DOCTYPE html>
-    <html>
+    <html lang="es">
     <head>
-        <meta charset='UTF-8'>
-        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verificación de cuenta - LUMETRIX</title>
+        <style>
+            body { 
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 0; 
+                background: linear-gradient(135deg, #000 0%, #111 50%, #000 100%);
+                color: #fff;
+            }
+            .container { 
+                max-width: 600px; 
+                margin: 0 auto; 
+                background: linear-gradient(135deg, #000 0%, #111 50%, #000 100%);
+                border: 2px solid #39ff14;
+                border-radius: 16px;
+                overflow: hidden;
+                box-shadow: 0 0 30px rgba(57, 255, 20, 0.3);
+            }
+            .header { 
+                background: linear-gradient(90deg, #39ff14, #00ffff, #ff00ff);
+                padding: 30px 20px;
+                text-align: center;
+                color: #000;
+            }
+            .header h1 { 
+                margin: 0; 
+                font-size: 32px; 
+                font-weight: 900;
+                letter-spacing: 0.1em;
+                text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            }
+            .content { 
+                padding: 40px 30px; 
+                text-align: center;
+            }
+            .codigo { 
+                font-size: 48px; 
+                font-weight: 900; 
+                color: #39ff14;
+                background: rgba(57, 255, 20, 0.1);
+                border: 3px solid #39ff14;
+                border-radius: 12px;
+                padding: 20px;
+                margin: 30px 0;
+                letter-spacing: 0.2em;
+                text-shadow: 0 0 20px #39ff14;
+                box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
+            }
+            .instrucciones {
+                font-size: 16px;
+                line-height: 1.6;
+                margin: 20px 0;
+                color: #e5e7eb;
+            }
+            .advertencia {
+                background: rgba(255, 0, 255, 0.1);
+                border: 2px solid #ff00ff;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #ff00ff;
+                font-weight: bold;
+            }
+            .footer { 
+                background: rgba(0, 0, 0, 0.5);
+                padding: 20px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #9ca3af;
+                border-top: 1px solid #39ff14;
+            }
+            .logo {
+                font-size: 24px;
+                font-weight: 900;
+                background: linear-gradient(90deg, #39ff14, #00ffff, #ff00ff);
+                -webkit-background-clip: text;
+                background-clip: text;
+                color: transparent;
+                margin-bottom: 10px;
+            }
+        </style>
     </head>
-    <body style='margin:0;padding:0;font-family:Arial,sans-serif;background-color:#0a0a0a;'>
-        <div style='max-width:600px;margin:0 auto;background:linear-gradient(135deg,#39ff14 0%,#00e5ff 100%);padding:2px;'>
-            <div style='background:#000;padding:40px 30px;'>
-                <!-- Header -->
-                <div style='text-align:center;margin-bottom:30px;'>
-                    <h1 style='color:#39ff14;margin:0;font-size:32px;text-shadow:0 0 10px #39ff14;'>
-                        🎮 LUMETRIX
-                    </h1>
-                    <p style='color:#00e5ff;margin:10px 0 0 0;font-size:14px;'>
-                        Anti-Simon Challenge
-                    </p>
-                </div>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">LUMETRIX</div>
+                <h1>🔐 Verificación de Cuenta</h1>
+            </div>
+            <div class="content">
+                <h2>¡Hola, ' . htmlspecialchars($nombre) . '!</h2>
+                <p class="instrucciones">
+                    Gracias por registrarte en <strong>LUMETRIX</strong>.<br>
+                    Para activar tu cuenta, introduce este código en la aplicación:
+                </p>
                 
-                <!-- Contenido -->
-                <div style='background:rgba(57,255,20,0.1);border:2px solid #39ff14;border-radius:12px;padding:30px;margin-bottom:20px;'>
-                    <h2 style='color:#fff;margin:0 0 20px 0;font-size:22px;'>
-                        ¡Hola, " . htmlspecialchars($nombre) . "!
-                    </h2>
-                    
-                    <p style='color:#ccc;line-height:1.6;margin:0 0 20px 0;'>
-                        Gracias por registrarte en <strong style='color:#39ff14;'>Lumetrix</strong>. 
-                        Para activar tu cuenta, introduce el siguiente código en la aplicación:
-                    </p>
-                    
-                    <!-- Código de verificación -->
-                    <div style='background:linear-gradient(135deg,#39ff14,#00e5ff);padding:3px;border-radius:8px;margin:30px 0;'>
-                        <div style='background:#000;padding:20px;border-radius:6px;text-align:center;'>
-                            <div style='color:#999;font-size:12px;margin-bottom:5px;'>TU CÓDIGO DE VERIFICACIÓN</div>
-                            <div style='font-size:42px;font-weight:bold;color:#39ff14;letter-spacing:8px;text-shadow:0 0 20px #39ff14;'>
-                                " . $codigo . "
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <p style='color:#ccc;line-height:1.6;margin:20px 0 0 0;font-size:14px;'>
-                        ⏱️ Este código expira en <strong style='color:#00e5ff;'>24 horas</strong>.
-                    </p>
-                </div>
+                <div class="codigo">' . $codigo . '</div>
                 
-                <!-- Footer -->
-                <div style='text-align:center;color:#666;font-size:12px;'>
-                    <p style='margin:0 0 10px 0;'>
-                        Si no solicitaste este código, ignora este email.
-                    </p>
-                    <p style='margin:0;'>
-                        © " . date('Y') . " Lumetrix - Todos los derechos reservados
-                    </p>
+                <p class="instrucciones">
+                    Este código es válido por <strong>24 horas</strong>.<br>
+                    Una vez verificado, podrás acceder a todos los niveles del juego.
+                </p>
+                
+                <div class="advertencia">
+                    ⚠️ Si no solicitaste esta verificación, ignora este email.
                 </div>
+            </div>
+            <div class="footer">
+                <p>Este es un email automático, por favor no respondas.</p>
+                <p>© 2024 LUMETRIX - Sistema de verificación de cuentas</p>
             </div>
         </div>
     </body>
-    </html>
-    ";
+    </html>';
     
-    $headers = "MIME-Version: 1.0\r\n";
-    $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: Lumetrix <noreply@colisan.com>\r\n";
-    $headers .= "Reply-To: noreply@colisan.com\r\n";
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+        'From: LUMETRIX <noreply@colisan.com>',
+        'Reply-To: noreply@colisan.com',
+        'X-Mailer: PHP/' . phpversion()
+    ];
     
-    return mail($email, $asunto, $mensaje, $headers);
+    $resultado = mail($email, $asunto, $html, implode("\r\n", $headers));
+    
+    if (!$resultado) {
+        error_log("Error enviando email de verificación a: $email");
+    }
+    
+    return $resultado;
 }
 
-/**
- * Generar código de verificación de 6 dígitos
- */
 function generarCodigoVerificacion() {
     return str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
 }
 
-/**
- * Verificar si un código es válido (no expirado)
- */
 function codigoEsValido($tiempo_verificacion, $horas_validez = 24) {
-    if (!$tiempo_verificacion) {
-        return false;
-    }
+    if (!$tiempo_verificacion) return false;
     
     $tiempo_actual = time();
-    $tiempo_codigo = strtotime($tiempo_verificacion);
-    $diferencia_horas = ($tiempo_actual - $tiempo_codigo) / 3600;
+    $tiempo_expiracion = strtotime($tiempo_verificacion) + ($horas_validez * 3600);
     
-    return $diferencia_horas <= $horas_validez;
+    return $tiempo_actual < $tiempo_expiracion;
 }
 
-/**
- * Limpiar códigos expirados (ejecutar periódicamente con cron)
- */
 function limpiarCodigosExpirados($pdo) {
-    $sql = "UPDATE usuarios_aplicaciones 
-            SET codigo_verificacion = NULL, 
-                tiempo_verificacion = NULL 
-            WHERE codigo_verificacion IS NOT NULL 
-            AND TIMESTAMPDIFF(HOUR, tiempo_verificacion, NOW()) > 24";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    
-    return $stmt->rowCount();
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE usuarios_aplicaciones 
+            SET verification_code = NULL, 
+                verification_expiry = NULL 
+            WHERE verification_expiry < NOW() 
+            AND verification_code IS NOT NULL
+        ");
+        $stmt->execute();
+        
+        $limpiados = $stmt->rowCount();
+        if ($limpiados > 0) {
+            error_log("Limpieza automática: $limpiados códigos expirados eliminados");
+        }
+        
+        return $limpiados;
+    } catch (Exception $e) {
+        error_log("Error limpiando códigos expirados: " . $e->getMessage());
+        return 0;
+    }
 }
 
+// Función de utilidad para debug
+function debugEmail($email, $codigo) {
+    return [
+        'email' => $email,
+        'codigo' => $codigo,
+        'timestamp' => date('Y-m-d H:i:s'),
+        'debug' => true
+    ];
+}
+?>

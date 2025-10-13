@@ -1162,3 +1162,546 @@ Sube solo la carpeta del juego. Las rutas deben apuntar a `/sistema_apps_upload/
 **Con este código funcional de Lumetrix, todos los proyectos se desplegarán sin duplicar carpetas ni romper rutas, con funcionalidad completa de usuarios, sesiones, offline/online, audio y verificación por email.**
 
 **¡Listo para usar en cualquier proyecto nuevo!** 🚀
+
+---
+
+# 📧 SISTEMA DE VERIFICACIÓN POR EMAIL - LUMETRIX
+
+## 📋 **DESCRIPCIÓN**
+
+Sistema completo de verificación de cuentas por email con código de 6 dígitos que expira en 24 horas, implementado en Lumetrix basado en el sistema de MemoFlip.
+
+---
+
+## 🗄️ **1. ESTRUCTURA DE BASE DE DATOS (YA EXISTENTE)**
+
+### **Columnas de verificación en `usuarios_aplicaciones`:**
+
+La tabla **YA TIENE** las columnas necesarias para verificación:
+
+```sql
+-- COLUMNAS EXISTENTES (NO crear nuevas)
+verification_code      VARCHAR(6)    -- Código de 6 dígitos
+verification_expiry    DATETIME      -- Fecha/hora de expiración
+verified_at           TIMESTAMP     -- Timestamp cuando se verificó
+```
+
+### **NO ES NECESARIO ejecutar ningún SQL**
+Las columnas ya existen en la tabla. Solo usar las existentes.
+
+---
+
+## 📧 **2. SISTEMA DE ENVÍO DE EMAILS**
+
+### **Archivo:** `PARA_HOSTALIA/sistema_apps_upload/lumetrix/enviar_email.php`
+
+**Funciones principales:**
+
+#### `enviarEmailVerificacion($email, $nombre, $codigo)`
+- Envía email HTML con el código de verificación
+- Template bonito con gradientes y estilo Lumetrix
+- Retorna `true` si el email se envió correctamente
+
+#### `generarCodigoVerificacion()`
+- Genera código aleatorio de 6 dígitos
+- Formato: `123456`
+
+#### `codigoEsValido($verification_expiry)`
+- Verifica si un código ha expirado
+- Compara `verification_expiry` (datetime) con el timestamp actual
+
+---
+
+## 🔐 **3. API DE AUTENTICACIÓN ACTUALIZADA**
+
+### **Archivo:** `PARA_HOSTALIA/sistema_apps_upload/lumetrix/auth_con_verificacion.php`
+
+### **Endpoints nuevos:**
+
+#### `POST auth.php?action=register`
+**Request:**
+```json
+{
+  "action": "register",
+  "email": "usuario@ejemplo.com",
+  "nombre": "Juan Pérez",
+  "username": "juan123",
+  "password": "contraseña123"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Registro exitoso. Revisa tu email para el código de verificación.",
+  "email_sent": true,
+  "requires_verification": true,
+  "user_key": "usuario@ejemplo.com_lumetrix"
+}
+```
+
+---
+
+#### `POST auth.php?action=verify_code`
+**Request:**
+```json
+{
+  "action": "verify_code",
+  "email": "usuario@ejemplo.com",
+  "codigo": "123456"
+}
+```
+
+**Response (éxito):**
+```json
+{
+  "success": true,
+  "message": "¡Cuenta verificada correctamente!",
+  "verified": true,
+  "user_key": "usuario@ejemplo.com_lumetrix"
+}
+```
+
+**Response (error):**
+```json
+{
+  "success": false,
+  "error": "Código incorrecto"
+}
+```
+
+---
+
+#### `POST auth.php?action=resend_code`
+**Request:**
+```json
+{
+  "action": "resend_code",
+  "email": "usuario@ejemplo.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Código reenviado a tu email",
+  "email_sent": true
+}
+```
+
+---
+
+#### `POST auth.php?action=login`
+**MODIFICADO:** Ahora verifica que el email esté verificado antes de permitir login.
+
+**Response (no verificado):**
+```json
+{
+  "success": false,
+  "error": "Debes verificar tu email antes de iniciar sesión"
+}
+```
+
+---
+
+## 🎨 **4. COMPONENTES REACT**
+
+### **Archivo:** `frontend/src/VerificationModal.jsx`
+
+**Modal de verificación** con:
+- Input de 6 dígitos numéricos
+- Botón "Verificar código"
+- Botón "Reenviar código"
+- Contador de expiración (24h)
+- Mensajes de error/éxito
+
+**Props:**
+```javascript
+{
+  isOpen: boolean,
+  onClose: () => void,
+  email: string,
+  onVerificationSuccess: () => void
+}
+```
+
+---
+
+### **Archivo:** `frontend/src/AuthModal.jsx` (NUEVO)
+
+**Modal de autenticación completo** con:
+- Tabs para Login/Registro
+- Formulario de registro con verificación
+- Formulario de login
+- Integración con VerificationModal
+- Manejo del flujo: Registro → Verificación → Login
+
+---
+
+## 🔄 **5. FLUJO COMPLETO**
+
+### **Registro:**
+```
+1. Usuario llena formulario de registro
+   ↓
+2. Sistema genera código de 6 dígitos
+   ↓
+3. Se guarda en BD (usuarios_aplicaciones)
+   ↓
+4. Se envía email con el código
+   ↓
+5. Usuario introduce el código en la app
+   ↓
+6. Sistema valida:
+   - Código correcto ✅
+   - No expirado (< 24h) ✅
+   ↓
+7. Cuenta activada → Puede hacer login
+```
+
+### **Login:**
+```
+1. Usuario introduce email + password
+   ↓
+2. Sistema verifica:
+   - Credenciales correctas ✅
+   - Email verificado ✅
+   ↓
+3. Si email NO verificado → Error
+4. Si todo OK → Login exitoso
+```
+
+---
+
+## 📊 **6. ESTADOS DE USUARIO**
+
+| Estado | `activo` | `verified_at` | `verification_code` | ¿Puede login? |
+|--------|----------|---------------|-------------------|---------------|
+| **Recién registrado** | 0 | NULL | 123456 | ❌ No |
+| **Email verificado** | 1 | 2024-10-13 10:30:00 | NULL | ✅ Sí |
+| **Usuario antiguo** | 1 | 2024-01-01 00:00:00 | NULL | ✅ Sí |
+
+---
+
+## 🧪 **7. TESTING**
+
+### **Prueba en desarrollo:**
+
+1. **Registro:**
+   ```
+   Email: test@ejemplo.com
+   Nombre: Usuario Test
+   Username: test123
+   Password: test123
+   ```
+
+2. **Verificar respuesta del servidor:**
+   - Si `email_sent: false`, el código aparecerá en la respuesta
+   - Si `email_sent: true`, revisar email (o spam)
+
+3. **Introducir código:**
+   - Código: `123456` (6 dígitos)
+   - Verificar que cuenta se activa
+
+4. **Intentar login:**
+   - Antes de verificar → Error
+   - Después de verificar → OK ✅
+
+---
+
+## 🚀 **8. DESPLIEGUE**
+
+### **Pasos para activar en producción:**
+
+1. **Subir archivos PHP:**
+   ```
+   PARA_HOSTALIA/sistema_apps_upload/lumetrix/
+   ├── enviar_email.php (NUEVO)
+   └── auth_con_verificacion.php (reemplazar auth.php)
+   ```
+
+2. **Compilar y subir React:**
+   ```bash
+   cd frontend
+   npm run build
+   # Subir carpeta dist/ a Hostalia
+   ```
+
+3. **Verificar configuración de email:**
+   - Servidor SMTP configurado en Hostalia
+   - Email `noreply@colisan.com` debe existir
+   - Verificar que emails NO vayan a spam
+
+---
+
+## ⚙️ **9. CONFIGURACIÓN AVANZADA**
+
+### **Cambiar tiempo de expiración:**
+```php
+// En enviar_email.php, línea ~67
+function codigoEsValido($tiempo_verificacion, $horas_validez = 24) {
+    // Cambiar 24 por el número de horas deseado
+}
+```
+
+### **Cambiar longitud del código:**
+```php
+// En enviar_email.php, línea ~58
+function generarCodigoVerificacion() {
+    return str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
+    // Para 4 dígitos: rand(1000, 9999) y str_pad(..., 4, ...)
+}
+```
+
+### **Personalizar email:**
+Editar `enviar_email.php` línea 13-65 (HTML del email)
+
+---
+
+## 📧 **10. PLANTILLA DE EMAIL**
+
+El email enviado incluye:
+- ✅ Header con gradiente Lumetrix
+- ✅ Código destacado en grande
+- ✅ Instrucciones claras
+- ✅ Advertencia de expiración
+- ✅ Diseño responsive
+- ✅ Mensaje de "no responder"
+
+---
+
+## 🔍 **11. TROUBLESHOOTING**
+
+### **Email no se envía:**
+- Verificar configuración SMTP en Hostalia
+- Revisar logs: `error_log` en `enviar_email.php`
+- Comprobar que el servidor permite `mail()`
+
+### **Código no válido:**
+- Verificar que no hayan pasado 24 horas
+- Comprobar que el código es exactamente 6 dígitos
+- Revisar campo `verification_code` en BD
+
+### **Usuario no puede hacer login:**
+- Verificar campo `verified_at` NO es NULL
+- Verificar campo `activo = 1`
+- Comprobar que la contraseña sea correcta
+
+---
+
+## 📝 **12. NOTAS IMPORTANTES**
+
+⚠️ **Columnas usadas:**
+El sistema usa las columnas EXISTENTES en la tabla:
+- `verification_code` (varchar 6) - Código de 6 dígitos
+- `verification_expiry` (datetime) - Fecha/hora de expiración
+- `verified_at` (timestamp) - Cuándo se verificó
+
+⚠️ **Usuarios existentes:**
+Los usuarios que ya estaban registrados tienen `verified_at` con una fecha, por lo que pueden hacer login sin problemas.
+
+⚠️ **Seguridad:**
+- Los códigos se guardan en texto plano (no es crítico, solo son válidos 24h)
+- El código expira automáticamente según `verification_expiry`
+- Posible mejora futura: limitar intentos de verificación
+
+⚠️ **Modo desarrollo:**
+Si el email falla al enviarse, el código se devuelve en la respuesta JSON (solo para testing).
+
+---
+
+## ✅ **13. CHECKLIST DE IMPLEMENTACIÓN**
+
+- [x] ✅ Columnas existentes verificadas (`verification_code`, `verification_expiry`, `verified_at`)
+- [x] ✅ `enviar_email.php` creado y subido
+- [x] ✅ `auth_con_verificacion.php` creado
+- [x] ✅ `VerificationModal.jsx` creado
+- [x] ✅ `AuthModal.jsx` creado
+- [x] ✅ `App.jsx` actualizado con nuevos componentes
+- [ ] 🧪 Probar registro completo
+- [ ] 🧪 Verificar envío de email
+- [ ] 🧪 Probar código correcto
+- [ ] 🧪 Probar código incorrecto
+- [ ] 🧪 Probar código expirado
+- [ ] 🧪 Probar reenvío de código
+- [ ] 🧪 Verificar que login requiere verificación
+
+---
+
+**¡Sistema de verificación por email implementado en Lumetrix!** 🎉
+
+---
+
+# 🔧 SOLUCIÓN: Sincronización Offline en APK Capacitor
+
+## ❌ **PROBLEMA DETECTADO**
+
+### Síntoma:
+Cuando un usuario **juega offline** (sin internet):
+1. ✅ El progreso se guarda localmente en `localStorage`
+2. ✅ Se marca como pendiente de sincronización
+3. ❌ Al reconectar y hacer auto-login, el progreso del **servidor** sobrescribe el **local**
+4. ❌ **Se pierde el avance offline**
+
+### Ejemplo:
+```
+1. Usuario en nivel 10 (servidor)
+2. Quita internet
+3. Juega offline: nivel 10 → 15
+4. Se guarda en localStorage: nivel 15 ✅
+5. Conecta internet
+6. Auto-login carga nivel 10 del servidor ❌
+7. PIERDE niveles 11-15 jugados offline ❌
+```
+
+---
+
+## 🎯 **CAUSA DEL PROBLEMA**
+
+En `handleLoginSuccess` (o función similar de login), el código:
+1. Recibe datos del servidor (nivel 10)
+2. Los aplica directamente al store
+3. **NO compara** con el progreso local (nivel 15)
+4. **Sobrescribe** el progreso más avanzado
+
+---
+
+## ✅ **SOLUCIÓN: Merge Inteligente**
+
+### Estrategia:
+Al hacer login, **comparar** progreso servidor vs local y **usar el más avanzado**.
+
+---
+
+## 📝 **CÓDIGO IMPLEMENTADO EN LUMETRIX**
+
+### **Función mergeProgress**:
+
+```javascript
+// 🔀 MERGE INTELIGENTE: Combinar progreso servidor + local
+const mergeProgress = (userData) => {
+  const localProgress = getLocalProgress();
+  
+  // Obtener datos del servidor
+  const serverLevel = userData?.nivel_actual || 1;
+  const serverTime = userData?.total_time_s || 0;
+  const serverPuntos = userData?.total_puntos || 0;
+  
+  // 🔀 MERGE: Usar el progreso más avanzado
+  const finalLevel = Math.max(serverLevel, localProgress.nivel_actual);
+  const finalTime = Math.max(serverTime, localProgress.total_time_s);
+  const finalPuntos = Math.max(serverPuntos, localProgress.total_puntos);
+  
+  console.log('📊 Merge progreso:', { 
+    servidor: { nivel: serverLevel, tiempo: serverTime, puntos: serverPuntos },
+    local: { nivel: localProgress.nivel_actual, tiempo: localProgress.total_time_s, puntos: localProgress.total_puntos },
+    final: { nivel: finalLevel, tiempo: finalTime, puntos: finalPuntos }
+  });
+  
+  // ✅ Aplicar el progreso más avanzado
+  setLevel(finalLevel);
+  setCurrentLevel(finalLevel);
+  setTotalTime(finalTime);
+  setTotalPuntos(finalPuntos);
+  
+  // Guardar en localStorage
+  saveLocalProgress(finalLevel, finalTime, finalPuntos);
+  
+  // 📤 Si el progreso local es mayor, sincronizar al servidor
+  if (finalLevel > serverLevel || finalTime > serverTime || finalPuntos > serverPuntos) {
+    console.log('📤 Progreso local más avanzado, sincronizando al servidor...');
+    setTimeout(() => {
+      syncToServer().then(() => {
+        console.log('✅ Progreso offline sincronizado al servidor');
+      }).catch(err => {
+        console.error('❌ Error sincronizando progreso:', err);
+      });
+    }, 500);
+  }
+};
+```
+
+### **Aplicado en:**
+- `checkSession()` - Cuando detecta sesión activa
+- `auto-login` - Cuando hace login automático con credenciales guardadas
+- `handleLogin()` - Cuando el usuario hace login manual (vía reload)
+
+---
+
+## 🔍 **PUNTOS CLAVE**
+
+### 1. **Obtener progreso local**
+```javascript
+const localProgress = getLocalProgress();
+```
+
+### 2. **Comparar y usar el mayor**
+```javascript
+const finalLevel = Math.max(serverLevel, localProgress.nivel_actual);
+const finalTime = Math.max(serverTime, localProgress.total_time_s);
+const finalPuntos = Math.max(serverPuntos, localProgress.total_puntos);
+```
+
+### 3. **Sincronizar al servidor si local > servidor**
+```javascript
+if (finalLevel > serverLevel || finalTime > serverTime || finalPuntos > serverPuntos) {
+  await syncToServer();
+}
+```
+
+---
+
+## 🧪 **CÓMO PROBAR**
+
+### Escenario de prueba:
+1. ✅ Login con internet (ej: nivel 5)
+2. ❌ Quitar internet (modo avión)
+3. 🎮 Jugar 3 niveles (5 → 8)
+4. ✅ Conectar internet
+5. 🔄 Reabrir la app (o hacer logout/login)
+
+### Resultado esperado:
+```
+📊 Merge progreso: {
+  servidor: { nivel: 5, tiempo: 500, puntos: 5000 },
+  local: { nivel: 8, tiempo: 800, puntos: 8000 },
+  final: { nivel: 8, tiempo: 800, puntos: 8000 }
+}
+📤 Progreso local más avanzado, sincronizando al servidor...
+✅ Progreso offline sincronizado al servidor
+```
+
+**El usuario debería estar en nivel 8, NO en nivel 5** ✅
+
+---
+
+## 📂 **ARCHIVOS MODIFICADOS EN LUMETRIX**
+
+- `frontend/src/App.jsx` - Componente `Intro` con función `mergeProgress`
+
+---
+
+## 🎯 **BENEFICIOS**
+
+✅ **Sin pérdida de progreso offline**  
+✅ **Sincronización automática al reconectar**  
+✅ **Experiencia fluida para el usuario**  
+✅ **Logs claros para debugging**
+
+---
+
+## 📋 **CHECKLIST DE IMPLEMENTACIÓN**
+
+- [x] ✅ Modificar función de login para obtener `getLocalProgress()`
+- [x] ✅ Implementar merge con `Math.max()`
+- [x] ✅ Añadir sincronización condicional al servidor
+- [x] ✅ Añadir logs de debugging
+- [ ] 🧪 Probar escenario offline → online
+- [ ] 🧪 Verificar que progreso se mantiene
+- [ ] 🧪 Verificar que se sincroniza al servidor
+
+---
+
+**¡Lumetrix ahora tiene el mismo fix que MemoFlip!** 🚀
