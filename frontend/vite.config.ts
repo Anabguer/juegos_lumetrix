@@ -11,12 +11,21 @@ export default defineConfig({
   build: {
     lib: {
       entry: 'src/entry.jsx',
-      name: 'Lumetrix',
+      name: 'LumetrixGame',
       fileName: () => 'game.bundle.js',
-      formats: ['es']
+      formats: ['iife']
     },
     outDir: 'dist',
     sourcemap: true,
-    target: 'es2018'
+    target: 'es2015',
+    rollupOptions: {
+      output: {
+        extend: true,
+        globals: {
+          'react': 'React',
+          'react-dom': 'ReactDOM'
+        }
+      }
+    }
   }
 })

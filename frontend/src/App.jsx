@@ -14,6 +14,20 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
  *  - Overlays: ganar ✨ / perder 💔 con margen correcto
  */
 
+// Detectar si estamos en Capacitor (APK) o web
+const isCapacitor = () => {
+  return window.Capacitor !== undefined || window.location.protocol === 'capacitor:';
+};
+
+// Función para obtener la ruta correcta de assets
+const getAssetPath = (path) => {
+  // Si estamos en Capacitor, quitar el prefijo 'lumetrix/'
+  if (isCapacitor() && path.startsWith('lumetrix/')) {
+    return path.replace('lumetrix/', '');
+  }
+  return path;
+};
+
 // ---------------- Utilidades de nivel ----------------
 const ACCENTS = [
   "#39ff14", // lima
@@ -155,7 +169,7 @@ const LEVEL_CONFIG = {
 };
 
 // ---------------- Sonido (WebAudio) ----------------
-function useSFX(enabled, volume = 0.08){
+function useSFX(enabled, volume = 0.08, musicOn = true){
   const ctxRef = useRef(null);
   const bgAudioRef = useRef(null);
   const startAudioRef = useRef(null);
@@ -173,19 +187,44 @@ function useSFX(enabled, volume = 0.08){
   };
   const tone = (f=440,d=0.12,type='sine',gain=0.25)=>{
     const ctx=getCtx(); if(!ctx) return; try{
+      // 🔧 FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
+      if(ctx.state === 'suspended') { 
+        ctx.resume().then(() => {
+          // Crear y reproducir después de reanudar
+          const o=ctx.createOscillator(); const g=ctx.createGain();
+          o.type=type; o.frequency.value=f; g.gain.value=gain * 8;
+          o.connect(g); g.connect(ctx.destination);
+          const t0=ctx.currentTime; o.start(t0); o.stop(t0+d);
+        }).catch(()=>{});
+        return; // Salir temprano, el resume hará el trabajo
+      }
+      
       const o=ctx.createOscillator(); const g=ctx.createGain();
-      o.type=type; o.frequency.value=f; g.gain.value=gain;
+      o.type=type; o.frequency.value=f; g.gain.value=gain * 8; // x8 volumen para clicks de fichas más fuerte
       o.connect(g); g.connect(ctx.destination);
-      if(ctx.state === 'suspended') { ctx.resume().catch(()=>{}); }
       const t0=ctx.currentTime; o.start(t0); o.stop(t0+d);
     }catch{}
   };
   const playMelody = (arr,dur=0.12,gap=0.04)=>{
     const ctx=getCtx(); if(!ctx||!arr||!arr.length) return; try{
-      if(ctx.state === 'suspended') { ctx.resume().catch(()=>{}); }
+      // 🔧 FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
+      if(ctx.state === 'suspended') { 
+        ctx.resume().then(() => {
+          // Crear y reproducir después de reanudar
+          arr.forEach((f,i)=>{
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            o.type='triangle'; o.frequency.value=f; g.gain.value=0.6;
+            o.connect(g); g.connect(ctx.destination);
+            const t=ctx.currentTime + i*(dur+gap);
+            o.start(t); o.stop(t+dur);
+          });
+        }).catch(()=>{});
+        return;
+      }
+      
       arr.forEach((f,i)=>{
         const o=ctx.createOscillator(); const g=ctx.createGain();
-        o.type='triangle'; o.frequency.value=f; g.gain.value=0.3;
+        o.type='triangle'; o.frequency.value=f; g.gain.value=0.6; // x2 volumen para melodías
         o.connect(g); g.connect(ctx.destination);
         const t=ctx.currentTime + i*(dur+gap);
         o.start(t); o.stop(t+dur);
@@ -196,27 +235,64 @@ function useSFX(enabled, volume = 0.08){
   const initBgAudio = () => {
     if (bgAudioRef.current) return;
     try {
-      const audio = new Audio('lumetrix/audio/audiofondo.mp3');
+      const audio = new Audio(getAssetPath('lumetrix/audio/audiofondo.mp3'));
       audio.loop = true;
       audio.volume = volume; // Volumen dinámico
+      audio.preload = 'auto'; // Precargar el audio completo
+      
+      // FORZAR LOOP: Reiniciar manualmente cuando termine (Android WebView a veces ignora loop=true)
+      audio.addEventListener('ended', () => {
+        console.log('🔁 Audio terminado, reiniciando loop manual...');
+        audio.currentTime = 0;
+        if (musicOn) {
+          audio.play().catch(e => console.log('❌ Error reiniciando audio:', e));
+        }
+      });
+
+      // Monitorear si el audio se detiene inesperadamente
+      audio.addEventListener('pause', () => {
+        console.log('⏸️ Audio pausado. Paused:', audio.paused, 'Ended:', audio.ended, 'CurrentTime:', audio.currentTime);
+      });
+
+      // 🔧 FIX ANDROID: Monitorear constantemente si el audio se corta
+      const keepAliveInterval = setInterval(() => {
+        if (musicOn && bgAudioRef.current && bgAudioRef.current.paused && !bgAudioRef.current.ended) {
+          console.log('🚨 Audio pausado inesperadamente, reactivando...');
+          bgAudioRef.current.play().catch(e => console.log('❌ Error reactivando:', e));
+        }
+      }, 2000); // Verificar cada 2 segundos
+
+      // Guardar el intervalo para limpiarlo después
+      audio.dataset.keepAliveInterval = keepAliveInterval;
+      
       bgAudioRef.current = audio;
+      console.log('✅ Audio de fondo inicializado con keep-alive');
     } catch (e) {
-      console.log('Error cargando audio de fondo:', e);
+      console.log('❌ Error cargando audio de fondo:', e);
     }
   };
 
   const startBgMusic = (musicEnabled = true) => {
     if (!musicEnabled || !bgAudioRef.current) return;
     try {
+      console.log('▶️ Iniciando música de fondo. Duration:', bgAudioRef.current.duration, 'Loop:', bgAudioRef.current.loop);
       bgAudioRef.current.play().catch(e => {
-        console.log('Error reproduciendo audio de fondo:', e);
+        console.log('❌ Error reproduciendo audio de fondo:', e);
       });
-    } catch (e) {}
+    } catch (e) {
+      console.log('❌ Excepción al iniciar música:', e);
+    }
   };
 
   const stopBgMusic = () => {
     if (!bgAudioRef.current) return;
     try {
+      // Limpiar intervalo de keep-alive
+      const intervalId = bgAudioRef.current.dataset.keepAliveInterval;
+      if (intervalId) {
+        clearInterval(parseInt(intervalId));
+      }
+      
       bgAudioRef.current.pause();
       bgAudioRef.current.currentTime = 0;
     } catch (e) {}
@@ -232,7 +308,7 @@ function useSFX(enabled, volume = 0.08){
   const initStartAudio = () => {
     if (startAudioRef.current) return;
     try {
-      const audio = new Audio('lumetrix/audio/jugar.mp3');
+      const audio = new Audio(getAssetPath('lumetrix/audio/jugar.mp3'));
       audio.volume = 0.7; // Volumen medio para el sonido de inicio
       startAudioRef.current = audio;
     } catch (e) {
@@ -249,6 +325,37 @@ function useSFX(enabled, volume = 0.08){
       });
     } catch (e) {}
   };
+
+  // Control de visibilidad: pausar música cuando la app va a segundo plano
+  useEffect(() => {
+    // Capacitor: appStateChange (solo para móviles)
+    let appStateListener;
+    const setupCapacitorListener = async () => {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+        const { App } = window.Capacitor.Plugins;
+        appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
+          if (bgAudioRef.current && bgAudioRef.current.src) {
+            if (!isActive) {
+              // App en segundo plano → pausar
+              bgAudioRef.current.pause();
+              console.log('🔇 Música pausada (app en segundo plano)');
+            } else if (musicOn && bgAudioRef.current.paused) {
+              // App vuelve al primer plano → reanudar SOLO si estaba pausada
+              bgAudioRef.current.play().catch(e => console.log('Error reanudando música:', e));
+              console.log('🔊 Música reanudada (app activa)');
+            }
+          }
+        });
+      }
+    };
+    setupCapacitorListener();
+
+    return () => {
+      if (appStateListener && appStateListener.remove) {
+        appStateListener.remove();
+      }
+    };
+  }, [musicOn]);
 
   return {
     start: ()=>{ 
@@ -289,7 +396,7 @@ function useLumetrixStyles(){
       .introWrap{position:relative;height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
       .introBg{position:absolute;inset:12px}
       .introBg i{position:absolute;border-radius:10px;opacity:.6;filter:blur(.5px)}
-      .panel{position:relative;z-index:2;width:100%;max-width:300px;border-radius:16px;padding:40px 24px;background:#11111135;border:3px solid #00e5ff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 0 22px rgba(0,0,0,.55);margin:0 20px;display:flex;flex-direction:column;justify-content:flex-start}
+      .panel{position:relative;z-index:2;width:100%;max-width:300px;border-radius:16px;padding:40px 24px;background:#11111135;border:3px solid #00e5ff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 0 22px rgba(0,0,0,.55);margin:30px 20px 0;display:flex;flex-direction:column;justify-content:flex-start}
       .logo{font-weight:900;text-align:center;margin:0 0 8px;letter-spacing:.18em;line-height:1;display:flex;justify-content:center;align-items:center}
       .logo span{display:inline-block;background:linear-gradient(90deg,var(--neon1),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 8px #ff2fbf59,0 0 12px #00e5ff47}
       .actions{display:flex;gap:8px;justify-content:center}
@@ -300,7 +407,7 @@ function useLumetrixStyles(){
       .btn2{border-color:#7dd3fc99;color:#7dd3fc}.btn2:hover{background:#00e5ff22}
       .copy{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:#ffffffb3;font-size:10px;z-index:3}
       /* HUD / Board */
-      .topbar{display:flex;align-items:center;justify-content:space-between;padding:8px 10px}
+      .topbar{display:flex;align-items:center;justify-content:space-between;padding:38px 10px 8px}
       .brand{font-size:18px;font-weight:800;background:linear-gradient(90deg,var(--neon1),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent}
       .icons{display:flex;gap:12px}
       .icon{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;color:#fff;border:none;background:transparent;cursor:pointer}
@@ -310,7 +417,7 @@ function useLumetrixStyles(){
       .meta .chip b{font-weight:700;margin-right:4px}
       .timebar{flex:1;height:12px;border-radius:999px;border:1px solid var(--accent);box-shadow:0 0 6px #ffffff22, 0 0 12px var(--accent)}
       .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
-      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 105px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
+      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 135px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
       @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent)}50%{box-shadow:0 0 14px var(--accent),0 0 18px var(--accent)}}
       .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .2s ease-out, box-shadow .2s ease-out;cursor:pointer}
       .tile:active{transform:scale(1.05);box-shadow:0 0 15px currentColor, 0 0 25px currentColor}
@@ -495,7 +602,7 @@ function Intro({ onPlay, onAuth }){
         </div>
         <div className="panel">
           <h1 className="logo">
-            <img src="lumetrix/img/logo.png" alt="LUMETRIX" style={{
+            <img src={getAssetPath("lumetrix/img/logo.png")} alt="LUMETRIX" style={{
               height:'150px',
               width:'500px',
               filter:'drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)',
@@ -637,7 +744,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     return basePuntos + speedBonus + specialBonus;
   };
 
-  const SFX = useSFX(soundOn, musicVolume);
+  const SFX = useSFX(soundOn, musicVolume, musicOn);
   const world = Math.floor((level-1)/10) + 1;
   const levelInWorld = ((level-1)%10) + 1;
   const accent = useMemo(()=> colorForLevel(level), [level]);
@@ -1013,17 +1120,20 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               levelWonRef.current = true; // Marcar que ya ganamos este nivel
             }
             
-            window.LUM_API.api('game.php?action=save_progress', {
-              method: 'POST',
-              body: JSON.stringify({
-                level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
-                total_time_s: spent,
-                puntos: puntos,
-                success: 1
-              })
-            }).catch(e => {
-              console.log('No hay sesión activa para guardar progreso');
-            });
+            // Solo guardar en servidor si hay sesión activa
+            if (window.LUM_API && window.currentUser) {
+              window.LUM_API.api('game.php?action=save_progress', {
+                method: 'POST',
+                body: JSON.stringify({
+                  level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
+                  total_time_s: spent,
+                  puntos: puntos,
+                  success: 1
+                })
+              }).catch(e => {
+                console.log('Error guardando progreso:', e);
+              });
+            }
           }
         } catch (_) {}
       }
@@ -1383,7 +1493,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
           
           // Al PERDER (tiempo agotado): guardar progreso en API (solo si hay sesión)
           try {
-            if (window.LUM_API) {
+            if (window.LUM_API && window.currentUser) {
               window.LUM_API.api('game.php?action=save_progress', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1393,7 +1503,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                   success: 0
                 })
               }).catch(e => {
-                console.log('No hay sesión activa para guardar progreso');
+                console.log('Error guardando progreso:', e);
               });
             }
           } catch (_) {}
@@ -1606,17 +1716,20 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                   levelWonRef.current = true; // Marcar que ya ganamos este nivel
                 }
                 
-                window.LUM_API.api('game.php?action=save_progress', {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
-                    total_time_s: spent,
-                    puntos: puntos,
-                    success: 1
-                  })
-                }).catch(e => {
-                  console.log('No hay sesión activa para guardar progreso');
-                });
+                // Solo guardar en servidor si hay sesión activa
+                if (window.LUM_API && window.currentUser) {
+                  window.LUM_API.api('game.php?action=save_progress', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      level: isPracticeMode ? currentLevel : (level + 1),  // En práctica no avanza
+                      total_time_s: spent,
+                      puntos: puntos,
+                      success: 1
+                    })
+                  }).catch(e => {
+                    console.log('Error guardando progreso:', e);
+                  });
+                }
               }
             } catch (_) { /* opcional: mostrar un aviso suave */ }
           }
@@ -1776,24 +1889,24 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     <section className="screen">
       <div className="topbar">
         <div className="brand">
-          <img src="lumetrix/img/logo2.png" alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+          <img src={getAssetPath("lumetrix/img/logo2.png")} alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
           <span style={{display:'none',fontSize:'16px',fontWeight:'900',letterSpacing:'0.1em',color:'#fff'}}>LUMETRIX</span>
         </div>
         <div className="icons">
           <button className="icon" onClick={onOpenLevelSelector} aria-label="Niveles" title="Selector de niveles">
-            <img src="lumetrix/img/ico_niveles.png?v=2" alt="Niveles" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src={getAssetPath("lumetrix/img/ico_niveles.png") + "?v=2"} alt="Niveles" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'22px',fontWeight:'bold',color:'var(--accent)'}}>≡</span>
           </button>
           <button className="icon" onClick={onOpenRanking} aria-label="Ranking">
-            <img src="lumetrix/img/ico_ranking.png" alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src={getAssetPath("lumetrix/img/ico_ranking.png")} alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>🏆</span>
           </button>
           <button className="icon" onClick={onOpenOptions} aria-label="Opciones">
-            <img src="lumetrix/img/ico_config.png" alt="Configuración" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src={getAssetPath("lumetrix/img/ico_config.png")} alt="Configuración" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>⚙️</span>
           </button>
           <button className="icon" onClick={onOpenAuth} aria-label="Login">
-            <img src="lumetrix/img/ico_user.png" alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <img src={getAssetPath("lumetrix/img/ico_user.png")} alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>👤</span>
           </button>
         </div>
@@ -2503,7 +2616,7 @@ export default function App(){
   const [showAuth, setShowAuth] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
-  const [musicVolume, setMusicVolume] = useState(0.08);
+  const [musicVolume, setMusicVolume] = useState(0.15); // Volumen inicial más alto
   const [vibrateOn, setVibrateOn] = useState(true);
   const [level, setLevel] = useState(1);
   const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
@@ -2543,6 +2656,9 @@ export default function App(){
   useEffect(()=>{ 
     window.LumetrixTest = Object.assign({}, window.LumetrixTest, { help:'LumetrixTest.start(), .tapExpected(), .state() — tras pulsar Jugar' }); 
   }, []);
+
+  // Pausar/reanudar música cuando la app va a segundo plano
+  // El control de visibilidad de la música ahora está en el hook useSFX
 
   // Función para iniciar un nivel específico
   const startLevel = (levelNum) => {

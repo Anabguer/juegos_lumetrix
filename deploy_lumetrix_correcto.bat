@@ -44,6 +44,8 @@ REM --- Primero intentamos FTPS (TLS explicito). Si falla, caemos a FTP plano --
  "lcd %LOCAL%" ^
  "ls" ^
  "synchronize remote -mirror -criteria=size -filemask=""|*.md;*.git*;database/;*.backup;*.bak;*.example""" ^
+ "cd /" ^
+ "put C:\Proyectos\Lumetrix\PARA_HOSTALIA\sistema_apps_upload\app_lumetrix.html" ^
  "exit"
 
 set "ERR=%ERRORLEVEL%"
@@ -58,6 +60,8 @@ if not "%ERR%"=="0" (
    "lcd %LOCAL%" ^
    "ls" ^
    "synchronize remote -mirror -criteria=size -filemask=""|*.md;*.git*;database/;*.backup;*.bak;*.example""" ^
+   "cd /" ^
+   "put C:\Proyectos\Lumetrix\PARA_HOSTALIA\sistema_apps_upload\app_lumetrix.html" ^
    "exit"
   set "ERR=%ERRORLEVEL%"
 )
