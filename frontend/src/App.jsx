@@ -482,17 +482,72 @@ function useLumetrixStyles(){
 }
 
 // ---------------- Intro ----------------
-function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout, authChecking }){
+function Intro({ onPlay, onAuth }){
   const bgRef = useRef(null); const logoRef = useRef(null);
+  const [userInfo, setUserInfo] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  
+  // 🔐 VERIFICAR SESIÓN AL CARGAR (igual que MemoFlip)
+  useEffect(() => {
+    checkSession();
+  }, []);
+  
+  const checkSession = async () => {
+    try {
+      console.log('🔍 [INTRO] Verificando sesión...');
+      const data = await window.LUM_API.api('auth.php?action=check_session');
+      
+      if (data && data.success) {
+        console.log('✅ [INTRO] Sesión activa:', data.user?.nick);
+        setUserInfo(data.user);
+        setAuthChecking(false);
+      } else {
+        console.log('👤 [INTRO] Sin sesión, intentando auto-login...');
+        
+        // ❌ No hay sesión → Intentar AUTO-LOGIN con credenciales guardadas
+        const savedEmail = localStorage.getItem('lum_user_email');
+        const savedToken = localStorage.getItem('lum_user_token');
+        
+        if (savedEmail && savedToken) {
+          console.log('🔑 [INTRO] Credenciales encontradas, auto-login...');
+          try {
+            const savedPassword = atob(savedToken);
+            const loginResult = await window.LUM_API.api('auth.php?action=login', {
+              method: 'POST',
+              body: JSON.stringify({ username: savedEmail, password: savedPassword })
+            });
+            
+            if (loginResult && loginResult.success) {
+              console.log('✅ [INTRO] Auto-login exitoso!');
+              setUserInfo(loginResult.user);
+            } else {
+              console.log('❌ [INTRO] Auto-login falló, limpiando credenciales');
+              localStorage.removeItem('lum_user_email');
+              localStorage.removeItem('lum_user_token');
+            }
+          } catch (e) {
+            console.log('❌ [INTRO] Error en auto-login:', e);
+          }
+        } else {
+          console.log('🔓 [INTRO] No hay credenciales guardadas');
+        }
+        setAuthChecking(false);
+      }
+    } catch (error) {
+      console.error('❌ [INTRO] Error verificando sesión:', error);
+      setAuthChecking(false);
+    }
+  };
   
   const handleLogout = async () => {
     try {
       await window.LUM_API.api('auth.php?action=logout');
-      // Llamar al callback del padre para actualizar el estado global
-      if (onLogout) onLogout();
+      localStorage.removeItem('lum_user_email');
+      localStorage.removeItem('lum_user_token');
+      console.log('🔓 [INTRO] Sesión cerrada');
       window.location.reload();
     } catch (e) {
-      console.log('Error al cerrar sesión');
+      console.log('❌ [INTRO] Error al cerrar sesión');
     }
   };
   
@@ -567,10 +622,10 @@ function Intro({ onPlay, onAuth, isLoggedIn, userInfo, onLogout, authChecking })
             <div style={{textAlign:'center',marginTop:20}}>
               <div style={{fontSize:14,opacity:0.7,color:'#39ff14'}}>Verificando sesión...</div>
             </div>
-          ) : isLoggedIn ? (
+          ) : userInfo ? (
             // Usuario logueado - mostrar progreso guardado
             <div style={{textAlign:'center',marginTop:20}}>
-              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:16}}>¡Hola, {userInfo?.nick || 'Usuario'}!</div>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:16}}>¡Hola, {userInfo.nick || 'Usuario'}!</div>
               <div className="actions" style={{marginBottom:8}}>
                 <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
               </div>
@@ -2679,202 +2734,14 @@ export default function App(){
   const [practiceModeLevel, setPracticeModeLevel] = useState(null);
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'pending' | 'offline' | 'syncing'
   
-  // 🔐 Estados de autenticación
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
-  const [authChecking, setAuthChecking] = useState(true); // Estado de "verificando autenticación"
-
-  // 🔥 MERGE INTELIGENTE: Local vs Servidor
-  const mergeProgress = (local, server) => {
-    const merged = {
-      nivel_actual: Math.max(local.nivel_actual || 1, server.nivel_actual || 1),
-      total_time_s: Math.max(local.total_time_s || 0, server.total_time_s || 0),
-      total_puntos: Math.max(local.total_puntos || 0, server.total_puntos || 0)
-    };
-    console.log('🔀 Merge progreso:', { local, server, merged });
-    return merged;
-  };
-
-  // 🔥 CARGAR PROGRESO: Primero local (instantáneo), luego merge con servidor
+  // 🔥 CARGAR PROGRESO LOCAL al iniciar
   useEffect(() => {
-    const loadProgress = async () => {
-      // 1️⃣ Cargar LOCAL primero (instantáneo, funciona offline)
-      const localProgress = getLocalProgress();
-      setLevel(localProgress.nivel_actual);
-      setCurrentLevel(localProgress.nivel_actual);
-      setTotalTime(localProgress.total_time_s);
-      setTotalPuntos(localProgress.total_puntos);
-      console.log('📱 Progreso local cargado:', localProgress);
-
-      // 2️⃣ AUTO-LOGIN Y MERGE CON SERVIDOR
-      try {
-        if (window.LUM_API && window.LUM_API.api) {
-          console.log('🔍 [AUTO-LOGIN] Verificando sesión activa...');
-          console.log('📧 [AUTO-LOGIN] Credenciales guardadas:', {
-            email: localStorage.getItem('lum_user_email'),
-            token: localStorage.getItem('lum_user_token') ? 'SÍ' : 'NO'
-          });
-          
-          // ✅ VERIFICAR SESIÓN ACTIVA
-          const result = await window.LUM_API.api('auth.php?action=check_session');
-          console.log('🔍 [AUTO-LOGIN] Resultado check_session:', result);
-          
-          if (result && result.success) {
-            // ✅ Hay sesión activa
-            console.log('✅ [AUTO-LOGIN] Sesión activa encontrada:', result.user?.nick);
-            setIsLoggedIn(true);
-            setUserInfo(result.user);
-            setAuthChecking(false);
-            setSyncStatus('syncing');
-            const progreso = await window.LUM_API.api('game.php?action=get_progress');
-            
-            if (progreso && progreso.success && progreso.data) {
-              const serverProgress = {
-                nivel_actual: progreso.data.nivel_actual || 1,
-                total_time_s: progreso.data.total_time_s || 0,
-                total_puntos: progreso.data.total_puntos || 0
-              };
-              
-              // 🔀 MERGE: El más avanzado gana
-              const merged = mergeProgress(localProgress, serverProgress);
-              
-              // Actualizar estados con progreso mergeado
-              setLevel(merged.nivel_actual);
-              setCurrentLevel(merged.nivel_actual);
-              setTotalTime(merged.total_time_s);
-              setTotalPuntos(merged.total_puntos);
-              
-              // Guardar merge localmente
-              saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-              
-              // Si hay cambios, sincronizar al servidor
-              if (JSON.stringify(merged) !== JSON.stringify(serverProgress)) {
-                console.log('📤 Sincronizando progreso mergeado al servidor...');
-                await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-              }
-              
-            setSyncStatus('synced');
-            console.log('✅ Progreso sincronizado correctamente');
-          } else {
-            setSyncStatus('synced');
-          }
-        } else {
-          // ❌ No hay sesión → Intentar AUTO-LOGIN
-          console.log('🔍 [AUTO-LOGIN] Sin sesión activa, buscando credenciales...');
-          const savedEmail = localStorage.getItem('lum_user_email');
-          const savedToken = localStorage.getItem('lum_user_token');
-          
-          console.log('🔍 [AUTO-LOGIN] Credenciales encontradas:', {
-            email: savedEmail ? 'SÍ' : 'NO',
-            token: savedToken ? 'SÍ' : 'NO'
-          });
-          
-          if (savedEmail && savedToken) {
-            console.log('🔑 [AUTO-LOGIN] Intentando auto-login...');
-            try {
-              const savedPassword = atob(savedToken);
-              console.log('🔍 [AUTO-LOGIN] Password decodificado:', savedPassword ? 'SÍ' : 'NO');
-              
-              const loginResult = await window.LUM_API.api('auth.php?action=login', {
-                method: 'POST',
-                body: JSON.stringify({ username: savedEmail, password: savedPassword })
-              });
-              
-              console.log('🔍 [AUTO-LOGIN] Resultado login:', loginResult);
-              
-              if (loginResult && loginResult.success) {
-                console.log('✅ [AUTO-LOGIN] Auto-login exitoso!');
-                setIsLoggedIn(true);
-                setUserInfo(loginResult.user);
-                setAuthChecking(false);
-                console.log('✅ [AUTO-LOGIN] Estados actualizados:', { isLoggedIn: true, user: loginResult.user?.nick });
-                
-                // 🔄 Cargar progreso del servidor y hacer MERGE
-                setSyncStatus('syncing');
-                const progreso = await window.LUM_API.api('game.php?action=get_progress');
-                if (progreso && progreso.success && progreso.data) {
-                  const serverProgress = {
-                    nivel_actual: progreso.data.nivel_actual || 1,
-                    total_time_s: progreso.data.total_time_s || 0,
-                    total_puntos: progreso.data.total_puntos || 0
-                  };
-                  
-                  // 🔀 MERGE INTELIGENTE: Local vs Servidor
-                  const merged = mergeProgress(localProgress, serverProgress);
-                  console.log('📊 [AUTO-LOGIN] Merge progreso:', { 
-                    local: localProgress, 
-                    servidor: serverProgress, 
-                    final: merged 
-                  });
-                  
-                  // ✅ Aplicar progreso mergeado
-                  setLevel(merged.nivel_actual);
-                  setCurrentLevel(merged.nivel_actual);
-                  setTotalTime(merged.total_time_s);
-                  setTotalPuntos(merged.total_puntos);
-                  saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-                  
-                  // 📤 Si el progreso local es mayor, sincronizar al servidor
-                  if (merged.nivel_actual > serverProgress.nivel_actual || 
-                      merged.total_time_s > serverProgress.total_time_s || 
-                      merged.total_puntos > serverProgress.total_puntos) {
-                    console.log('📤 [AUTO-LOGIN] Progreso local más avanzado, sincronizando al servidor...');
-                    await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-                  } else {
-                    setSyncStatus('synced');
-                  }
-                } else {
-                  setSyncStatus('synced');
-                }
-              } else {
-                // 🔍 Diferenciar entre error de credenciales y error de red
-                const errorMsg = loginResult?.message || '';
-                const isCredentialError = errorMsg.includes('inválidas') || errorMsg.includes('incorrectas') || errorMsg.includes('no encontrado');
-                
-                if (isCredentialError) {
-                  console.log('⚠️ [AUTO-LOGIN] Credenciales inválidas, limpiando...');
-                  localStorage.removeItem('lum_user_email');
-                  localStorage.removeItem('lum_user_token');
-                } else {
-                  console.log('⚠️ [AUTO-LOGIN] Error temporal (red/servidor), manteniendo credenciales para reintentar');
-                }
-                
-                setIsLoggedIn(false);
-                setAuthChecking(false);
-                setSyncStatus('offline');
-              }
-            } catch (e) {
-              console.log('❌ [AUTO-LOGIN] Error en auto-login (red/servidor):', e);
-              console.log('📝 [AUTO-LOGIN] Manteniendo credenciales para reintentar más tarde');
-              // NO borrar credenciales en caso de error de red
-              // El usuario puede reintentar recargando la app cuando tenga internet
-              setIsLoggedIn(false);
-              setAuthChecking(false);
-              setSyncStatus('offline');
-            }
-          } else {
-            console.log('🔓 [AUTO-LOGIN] No hay credenciales guardadas, trabajando offline');
-            setIsLoggedIn(false);
-            setAuthChecking(false);
-            setSyncStatus('offline');
-          }
-        }
-      } else {
-        setAuthChecking(false);
-        setSyncStatus('offline');
-      }
-      } catch (e) {
-        setAuthChecking(false);
-        setSyncStatus('offline');
-        console.log('⚠️ Error cargando del servidor, trabajando offline:', e);
-        
-        // Si hay progreso pendiente de sincronizar, marcarlo
-        if (getPendingSyncStatus()) {
-          setSyncStatus('pending');
-        }
-      }
-    };
-    loadProgress();
+    const localProgress = getLocalProgress();
+    setLevel(localProgress.nivel_actual);
+    setCurrentLevel(localProgress.nivel_actual);
+    setTotalTime(localProgress.total_time_s);
+    setTotalPuntos(localProgress.total_puntos);
+    console.log('📱 Progreso local cargado:', localProgress);
   }, []);
 
   useEffect(()=>{ 
@@ -2888,11 +2755,9 @@ export default function App(){
         console.log('📊 Estado de Autenticación:', {
           email: email || '❌ No guardado',
           token: token ? '✅ Guardado' : '❌ No guardado',
-          password: token ? atob(token) : '❌ No disponible',
-          isLoggedIn: isLoggedIn,
-          userInfo: userInfo
+          password: token ? atob(token) : '❌ No disponible'
         });
-        return { email, token: token ? atob(token) : null, isLoggedIn, userInfo };
+        return { email, token: token ? atob(token) : null };
       },
       clearAuth: () => {
         localStorage.removeItem('lum_user_email');
@@ -2900,30 +2765,8 @@ export default function App(){
         console.log('✅ Credenciales eliminadas');
       }
     };
-  }, [isLoggedIn, userInfo]);
+  }, []);
 
-  // 🔐 LOGOUT: Cerrar sesión y limpiar credenciales
-  const handleLogout = async () => {
-    try {
-      if (window.LUM_API && window.LUM_API.api) {
-        await window.LUM_API.api('auth.php?action=logout');
-      }
-      
-      // Limpiar credenciales guardadas
-      localStorage.removeItem('lum_user_email');
-      localStorage.removeItem('lum_user_token');
-      console.log('🔓 Sesión cerrada y credenciales eliminadas');
-      
-      // Actualizar estados
-      setIsLoggedIn(false);
-      setUserInfo(null);
-      
-      // Recargar para limpiar todo
-      window.location.reload();
-    } catch (e) {
-      console.log('❌ Error al cerrar sesión:', e);
-    }
-  };
 
   // 🔥 SINCRONIZAR AL SERVIDOR (con manejo de errores)
   const syncToServer = async (nivel, tiempo, puntos) => {
@@ -2967,110 +2810,6 @@ export default function App(){
     }
   };
 
-  // 🔥 AUTO-RETRY: Intentar auto-login y sincronizar cuando vuelve internet
-  const checkAndRetrySync = useCallback(async () => {
-    console.log('🔄 [AUTO-RETRY] Ejecutando checkAndRetrySync...', { 
-      isOnline: navigator.onLine, 
-      isLoggedIn 
-    });
-    
-    if (!navigator.onLine) {
-      console.log('⚠️ [AUTO-RETRY] Sin conexión, saliendo...');
-      return;
-    }
-    
-    // 1️⃣ Si NO está logueado pero HAY credenciales → Reintentar auto-login
-    if (!isLoggedIn) {
-      const savedEmail = localStorage.getItem('lum_user_email');
-      const savedToken = localStorage.getItem('lum_user_token');
-      
-      console.log('🔍 [AUTO-RETRY] Estado:', {
-        email: savedEmail ? 'SÍ' : 'NO',
-        token: savedToken ? 'SÍ' : 'NO',
-        api: window.LUM_API ? 'SÍ' : 'NO'
-      });
-      
-      if (savedEmail && savedToken && window.LUM_API && window.LUM_API.api) {
-        console.log('🔄 [AUTO-RETRY] Detectado internet, reintentando auto-login...');
-        try {
-          const savedPassword = atob(savedToken);
-          const loginResult = await window.LUM_API.api('auth.php?action=login', {
-            method: 'POST',
-            body: JSON.stringify({ username: savedEmail, password: savedPassword })
-          });
-          
-          console.log('📊 [AUTO-RETRY] Resultado:', loginResult);
-          
-          if (loginResult && loginResult.success) {
-            console.log('✅ [AUTO-RETRY] Auto-login exitoso!');
-            setIsLoggedIn(true);
-            setUserInfo(loginResult.user);
-            
-            // Cargar y mergear progreso
-            const localProgress = getLocalProgress();
-            const progreso = await window.LUM_API.api('game.php?action=get_progress');
-            if (progreso && progreso.success && progreso.data) {
-              const serverProgress = {
-                nivel_actual: progreso.data.nivel_actual || 1,
-                total_time_s: progreso.data.total_time_s || 0,
-                total_puntos: progreso.data.total_puntos || 0
-              };
-              
-              const merged = mergeProgress(localProgress, serverProgress);
-              setLevel(merged.nivel_actual);
-              setCurrentLevel(merged.nivel_actual);
-              setTotalTime(merged.total_time_s);
-              setTotalPuntos(merged.total_puntos);
-              saveLocalProgress(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-              
-              // Sincronizar si local > servidor
-              if (merged.nivel_actual > serverProgress.nivel_actual || 
-                  merged.total_time_s > serverProgress.total_time_s || 
-                  merged.total_puntos > serverProgress.total_puntos) {
-                await syncToServer(merged.nivel_actual, merged.total_time_s, merged.total_puntos);
-              }
-              setSyncStatus('synced');
-            }
-          }
-        } catch (e) {
-          console.log('⚠️ [AUTO-RETRY] Error al reintentar auto-login:', e);
-        }
-      } else {
-        console.log('⚠️ [AUTO-RETRY] No hay credenciales o API no disponible');
-      }
-    } else {
-      console.log('✅ [AUTO-RETRY] Ya está logueado, saltando auto-login');
-    }
-    
-    // 2️⃣ Si hay progreso pendiente de sincronizar → Sincronizar
-    if (getPendingSyncStatus() && isLoggedIn) {
-      console.log('🔄 Detectado internet, intentando sincronizar progreso pendiente...');
-      const localProgress = getLocalProgress();
-      const success = await syncToServer(
-        localProgress.nivel_actual,
-        localProgress.total_time_s,
-        localProgress.total_puntos
-      );
-      
-      if (success) {
-        console.log('✅ Sincronización pendiente completada');
-      }
-    }
-  }, [isLoggedIn]); // Solo dependemos de isLoggedIn para minimizar re-renders
-
-  useEffect(() => {
-    // Escuchar cambios de conectividad
-    window.addEventListener('online', checkAndRetrySync);
-    
-    // También verificar periódicamente cada 30 segundos
-    const interval = setInterval(checkAndRetrySync, 30000);
-
-    return () => {
-      window.removeEventListener('online', checkAndRetrySync);
-      clearInterval(interval);
-    };
-  }, [checkAndRetrySync]);
-
   // Pausar/reanudar música cuando la app va a segundo plano
   // El control de visibilidad de la música ahora está en el hook useSFX
 
@@ -3086,11 +2825,7 @@ export default function App(){
         {screen==='intro' ? (
           <Intro 
             onPlay={()=>setScreen('game')} 
-            onAuth={()=>setShowAuth(true)} 
-            isLoggedIn={isLoggedIn} 
-            userInfo={userInfo}
-            onLogout={handleLogout}
-            authChecking={authChecking}
+            onAuth={()=>setShowAuth(true)}
           />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
