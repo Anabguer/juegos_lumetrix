@@ -2279,47 +2279,6 @@ function Auth({ onClose }){
   const [password, setPassword] = useState(savedPassword); // ✅ Pre-rellenado
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
-
-  // ❌ AUTO-LOGIN DESHABILITADO EN INTRO - USAR EL DEL APP PRINCIPAL
-  // Este useEffect ya no es necesario porque el auto-login se maneja en el useEffect principal del App
-  /*
-  useEffect(() => {
-    const checkAuth = async () => {
-      console.log('🔍 [AUTO-LOGIN INTRO] Iniciando verificación...');
-      // ... código comentado ...
-    };
-    checkAuth();
-  }, []);
-  */
-
-  // ✅ El auto-login ahora se maneja en el useEffect principal del App (líneas 2739+)
-  // Los props isLoggedIn y userInfo se reciben directamente del componente App padre
-  
-  useEffect(() => {
-    // Log para debug: verificar que los props se reciben correctamente
-    if (isLoggedIn && userInfo) {
-      console.log('✅ [INTRO] Props recibidos:', { isLoggedIn, nick: userInfo.nick });
-    }
-  }, [isLoggedIn, userInfo]);
-
-  const handleLogout = async () => {
-    setLoading(true);
-    try {
-      await window.LUM_API.api('auth.php?action=logout');
-      
-      // ✅ LIMPIAR CREDENCIALES GUARDADAS
-      localStorage.removeItem('lum_user_email');
-      localStorage.removeItem('lum_user_token');
-      console.log('🔓 Credenciales eliminadas');
-      
-      window.location.reload();
-    } catch (e) {
-      setMessage('❌ Error al cerrar sesión');
-      setLoading(false);
-    }
-  };
 
   const handleRegister = async () => {
     if (!nombre || !username || !email || !password) {
@@ -2393,49 +2352,8 @@ function Auth({ onClose }){
     <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #ff00ff',boxShadow:'0 0 10px #ff00ff',background:'#000'}}>✕</button>
       
-      {isLoggedIn ? (
-        // Usuario ya logueado - mostrar info y logout
-        <>
-          <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
-            Mi cuenta
-          </h3>
-          <div className="list" style={{gap:12}}>
-            {userInfo && (
-              <div style={{background:'rgba(255,0,255,0.1)',border:'1px solid #ff00ff33',borderRadius:'10px',padding:'16px',textAlign:'center'}}>
-                <div style={{fontSize:12,opacity:0.6,marginBottom:4}}>Jugador</div>
-                <div style={{fontSize:20,color:'#ff00ff',fontWeight:'bold',marginBottom:4}}>{userInfo.nick}</div>
-                <div style={{fontSize:11,opacity:0.5,marginBottom:8}}>{userInfo.email}</div>
-                {userInfo.fecha_registro && (
-                  <div style={{fontSize:9,opacity:0.4}}>
-                    Desde {new Date(userInfo.fecha_registro).toLocaleDateString('es-ES', {year: 'numeric', month: 'short', day: 'numeric'})}
-                  </div>
-                )}
-              </div>
-            )}
-            
-            <button 
-              className="btn" 
-              onClick={handleLogout}
-              disabled={loading}
-              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold',width:'100%',opacity:loading?0.5:1}}
-            >
-              {loading ? 'Cerrando...' : 'Cerrar sesión'}
-            </button>
-
-            <div style={{fontSize:10,opacity:0.4,textAlign:'center',marginTop:8,lineHeight:1.4}}>
-              ¿Eliminar cuenta?{' '}
-              <a 
-                href="mailto:info@intocables13.com?subject=Eliminar cuenta - Lumetrix&body=Solicito la eliminación de mi cuenta con el email: " 
-                style={{color:'#ff00ff',textDecoration:'underline'}}
-              >
-                Contactar
-              </a>
-            </div>
-          </div>
-        </>
-      ) : (
-        // Usuario NO logueado - mostrar login/registro
-        <>
+      {/* Login/Registro */}
+      <>
           {/* Tabs */}
           <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
             <button 
@@ -2531,7 +2449,6 @@ function Auth({ onClose }){
         </div>
       </div>
         </>
-      )}
     </div></div>
   );
 }
