@@ -2404,14 +2404,33 @@ function Auth({ onClose }){
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState(savedEmail); // ✅ Pre-rellenado
   const [password, setPassword] = useState(savedPassword); // ✅ Pre-rellenado
+  const [confirmPassword, setConfirmPassword] = useState(''); // ⭐ NUEVO: Confirmar contraseña
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [debugCode, setDebugCode] = useState(''); // Para mostrar el código si el email falla
+  const [registeredEmail, setRegisteredEmail] = useState(''); // ⭐ NUEVO: Para guardar email del registro
+  const [registeredPassword, setRegisteredPassword] = useState(''); // ⭐ NUEVO: Para auto-login después de verificar
 
   const handleRegister = async () => {
+    // ⭐ VALIDACIONES ESTILO MEMOFLIP
     if (!nombre || !username || !email || !password) {
       setMessage('❌ Rellena todos los campos');
+      return;
+    }
+    
+    if (!confirmPassword) {
+      setMessage('❌ Debes confirmar tu contraseña');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setMessage('❌ Las contraseñas no coinciden');
+      return;
+    }
+    
+    if (password.length < 6) {
+      setMessage('❌ La contraseña debe tener al menos 6 caracteres');
       return;
     }
     
@@ -2425,16 +2444,22 @@ function Auth({ onClose }){
       });
       
       if (result.success && result.requires_verification) {
+        // ⭐ GUARDAR EMAIL Y PASSWORD PARA AUTO-LOGIN
+        setRegisteredEmail(email);
+        setRegisteredPassword(password);
+        
         // Cambiar a modo verificación
         setMode('verify');
         setDebugCode(result.debug_code || '');
         setMessage(result.debug_code 
           ? `📧 Email enviado a ${email}. Código de prueba: ${result.debug_code}` 
           : `📧 Revisa tu email (${email}) para obtener el código de verificación`);
+        // ⭐ NO RECARGAR NI CERRAR
       } else if (result.success) {
         setMessage('✅ ¡Registrado! Ahora inicia sesión');
         setMode('login');
         setPassword('');
+        setConfirmPassword('');
       } else {
         setMessage('❌ ' + (result.message || 'Error en registro'));
       }
@@ -2498,18 +2523,53 @@ function Auth({ onClose }){
     setMessage('');
     
     try {
+      // Usar el email correcto (registrado o actual)
+      const emailToVerify = registeredEmail || email;
+      
       const result = await window.LUM_API.api('auth.php?action=verify_code', {
         method: 'POST',
-        body: JSON.stringify({ email, codigo: verificationCode })
+        body: JSON.stringify({ email: emailToVerify, codigo: verificationCode })
       });
       
       if (result.success) {
-        setMessage('✅ ¡Cuenta verificada! Ya puedes iniciar sesión');
-        setTimeout(() => {
-          setMode('login');
-          setVerificationCode('');
-          setDebugCode('');
-        }, 1500);
+        setMessage('✅ ¡Cuenta verificada! Iniciando sesión...');
+        
+        // ⭐ AUTO-LOGIN AUTOMÁTICO (estilo MemoFlip)
+        setTimeout(async () => {
+          try {
+            const loginData = await window.LUM_API.api('auth.php?action=login', {
+              method: 'POST',
+              body: JSON.stringify({ 
+                username: emailToVerify, 
+                password: registeredPassword 
+              })
+            });
+            
+            if (loginData.success) {
+              // Guardar credenciales para auto-login futuro
+              localStorage.setItem('lum_user_email', emailToVerify);
+              localStorage.setItem('lum_user_token', btoa(registeredPassword));
+              console.log('✅ Auto-login exitoso después de verificación');
+              
+              // Recargar para aplicar cambios
+              window.location.reload();
+            } else {
+              setMessage('⚠️ Cuenta verificada. Por favor, inicia sesión manualmente');
+              setTimeout(() => {
+                setMode('login');
+                setEmail(emailToVerify);
+                setPassword('');
+              }, 2000);
+            }
+          } catch (e) {
+            setMessage('⚠️ Cuenta verificada. Por favor, inicia sesión manualmente');
+            setTimeout(() => {
+              setMode('login');
+              setEmail(emailToVerify);
+              setPassword('');
+            }, 2000);
+          }
+        }, 1000);
       } else {
         setMessage('❌ ' + (result.error || 'Código incorrecto'));
       }
@@ -2525,9 +2585,12 @@ function Auth({ onClose }){
     setMessage('');
     
     try {
+      // Usar el email correcto (registrado o actual)
+      const emailToResend = registeredEmail || email;
+      
       const result = await window.LUM_API.api('auth.php?action=resend_code', {
         method: 'POST',
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: emailToResend })
       });
       
       if (result.success) {
@@ -2559,7 +2622,7 @@ function Auth({ onClose }){
           <div className="list" style={{gap:12}}>
             <p style={{fontSize:14,textAlign:'center',color:'#ffffff99',lineHeight:'1.5'}}>
               Introduce el código de 6 dígitos que hemos enviado a:<br/>
-              <strong style={{color:'#ff00ff'}}>{email}</strong>
+              <strong style={{color:'#ff00ff'}}>{registeredEmail || email}</strong>
             </p>
             
             <input 
@@ -2691,6 +2754,18 @@ function Auth({ onClose }){
               onKeyPress={(e) => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
               style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
             />
+            
+            {/* ⭐ NUEVO: Campo "Confirmar Contraseña" (solo en registro) */}
+            {mode === 'register' && (
+              <input 
+                placeholder="Confirmar contraseña" 
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleRegister()}
+                style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+              />
+            )}
             
             {message && (
               <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('✅') ? '#39ff14' : '#ff4466'}}>
