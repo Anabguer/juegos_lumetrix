@@ -21,7 +21,7 @@ if ($act === 'register') {
 
   // Generar código de verificación
   $codigo = generarCodigoVerificacion();
-  $verification_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
+  $verification_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes')); // ⭐ 15 minutos de validez
   
   $now = date('Y-m-d H:i:s');
   $ins = $pdo->prepare('INSERT INTO usuarios_aplicaciones
@@ -157,7 +157,7 @@ if ($act === 'resend_code') {
   
   // Generar nuevo código
   $codigo = generarCodigoVerificacion();
-  $verification_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
+  $verification_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes')); // ⭐ 15 minutos de validez
   
   $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET verification_code=?, verification_expiry=? WHERE usuario_aplicacion_key=?');
   $upd->execute([$codigo, $verification_expiry, $uakey]);

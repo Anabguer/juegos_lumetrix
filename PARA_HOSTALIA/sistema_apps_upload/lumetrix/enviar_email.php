@@ -111,7 +111,7 @@ function enviarEmailVerificacion($email, $nombre, $codigo) {
                 <div class="codigo">' . $codigo . '</div>
                 
                 <p class="instrucciones">
-                    Este código es válido por <strong>24 horas</strong>.<br>
+                    Este código es válido por <strong>15 minutos</strong>.<br>
                     Una vez verificado, podrás acceder a todos los niveles del juego.
                 </p>
                 
