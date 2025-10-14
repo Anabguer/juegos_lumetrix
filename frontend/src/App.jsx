@@ -509,6 +509,16 @@ function Intro({ onPlay, onAuth }){
       if (data && data.success) {
         console.log('✅ [INTRO] Sesión activa:', data.user?.nick);
         setUserInfo(data.user);
+        
+        // ✅ APLICAR PROGRESO DEL SERVIDOR
+        if (data.progreso) {
+          console.log('📊 [INTRO] Aplicando progreso del servidor:', data.progreso);
+          setLevel(data.progreso.nivel_actual || 1);
+          setCurrentLevel(data.progreso.nivel_actual || 1);
+          setTotalTime(data.progreso.total_time_s || 0);
+          setTotalPuntos(data.progreso.total_puntos || 0);
+        }
+        
         setAuthChecking(false);
       } else {
         console.log('👤 [INTRO] Sin sesión, intentando auto-login...');
@@ -529,6 +539,15 @@ function Intro({ onPlay, onAuth }){
             if (loginResult && loginResult.success) {
               console.log('✅ [INTRO] Auto-login exitoso!');
               setUserInfo(loginResult.user);
+              
+              // ✅ APLICAR PROGRESO DEL SERVIDOR
+              if (loginResult.progreso) {
+                console.log('📊 [INTRO] Aplicando progreso del servidor (auto-login):', loginResult.progreso);
+                setLevel(loginResult.progreso.nivel_actual || 1);
+                setCurrentLevel(loginResult.progreso.nivel_actual || 1);
+                setTotalTime(loginResult.progreso.total_time_s || 0);
+                setTotalPuntos(loginResult.progreso.total_puntos || 0);
+              }
             } else {
               console.log('❌ [INTRO] Auto-login falló, limpiando credenciales');
               localStorage.removeItem('lum_user_email');
