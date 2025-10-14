@@ -485,7 +485,7 @@ function useLumetrixStyles(){
 }
 
 // ---------------- Intro ----------------
-function Intro({ onPlay, onAuth }){
+function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTotalPuntos }){
   const bgRef = useRef(null); const logoRef = useRef(null);
   const [userInfo, setUserInfo] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
@@ -2780,6 +2780,10 @@ export default function App(){
           <Intro 
             onPlay={()=>setScreen('game')} 
             onAuth={()=>setShowAuth(true)}
+            setLevel={setLevel}
+            setCurrentLevel={setCurrentLevel}
+            setTotalTime={setTotalTime}
+            setTotalPuntos={setTotalPuntos}
           />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
