@@ -728,7 +728,7 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
 }
 
 // ---------------- Game ----------------
-function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus }){
+function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus, restartTrigger }){
   const boardRef = useRef(null);
   const [time, setTime] = useState(timeFor(level));
   const [running, setRunning] = useState(false);
@@ -1857,6 +1857,21 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 
   useEffect(()=>{ window.LumetrixTest = { start, state:()=>({level,world,levelInWorld,running,time,seqLen:(seqRef.current||[]).length}), tapExpected:()=>{ const id=seqRef.current[stepRef.current]; if(id!=null) tap(id); } }; },[level,world,levelInWorld,running,time]);
 
+  // ✅ Reiniciar nivel cuando se selecciona desde el selector
+  useEffect(() => {
+    if (restartTrigger > 0) {
+      // Detener nivel actual si está corriendo
+      if (running) {
+        clearInterval(timerRef.current);
+        setRunning(false);
+        runningRef.current = false;
+      }
+      // Reiniciar con el nuevo nivel
+      setTimeout(() => start(level), 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartTrigger]);
+
   // Event listeners para drag & drop robusto
   useEffect(() => {
     const move = (ev) => {
@@ -2729,6 +2744,7 @@ export default function App(){
   const [currentLevel, setCurrentLevel] = useState(() => getLocalProgress().nivel_actual);
   const [practiceModeLevel, setPracticeModeLevel] = useState(null);
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'pending' | 'offline' | 'syncing'
+  const [restartTrigger, setRestartTrigger] = useState(0); // ✅ Trigger para forzar reinicio de nivel
   
   // 🔥 CARGAR PROGRESO LOCAL al iniciar
   useEffect(() => {
@@ -2837,7 +2853,8 @@ export default function App(){
                 onUpdateCurrentLevel={setCurrentLevel}
                 onLocalProgressSave={saveLocalProgress}
                 onSyncToServer={syncToServer}
-                syncStatus={syncStatus} />
+                syncStatus={syncStatus}
+                restartTrigger={restartTrigger} />
         )}
 
         {showRanking && <Ranking onClose={()=>setShowRanking(false)} total={totalTime} />}
@@ -2848,6 +2865,7 @@ export default function App(){
             onSelectLevel={(lvl) => {
               setPracticeModeLevel(lvl < currentLevel ? lvl : null);
               setLevel(lvl);
+              setRestartTrigger(prev => prev + 1); // ✅ Forzar reinicio del nivel inmediatamente
             }}
           />
         )}
