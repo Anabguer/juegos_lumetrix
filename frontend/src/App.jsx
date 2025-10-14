@@ -1115,8 +1115,8 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       setTimeout(() => { try { hint.remove(); } catch {} }, 180);
     }, 800);
 
-    // Opcional: un "pip" suave y vibración mini
-    try { SFX.blink(720); } catch {}
+    // ✅ FIX: NO reproducir sonido en nudge, el sonido ya se reproduce en la línea 1726 con SFX.ok(pitch)
+    // try { SFX.blink(720); } catch {}
     vibrate(10, vibrateOn);
   };
 
