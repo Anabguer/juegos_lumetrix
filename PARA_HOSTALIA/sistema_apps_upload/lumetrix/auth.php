@@ -59,9 +59,9 @@ if ($act === 'login') {
 
   // upsert progreso
   $pdo->prepare('INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key) VALUES (?)')->execute([$uakey]);
-  $pr = $pdo->prepare('SELECT nivel_actual,total_time_s FROM lumetrix_progreso WHERE usuario_aplicacion_key=?');
+  $pr = $pdo->prepare('SELECT nivel_actual,total_time_s,total_puntos FROM lumetrix_progreso WHERE usuario_aplicacion_key=?');
   $pr->execute([$uakey]);
-  $progreso = $pr->fetch(PDO::FETCH_ASSOC) ?: ['nivel_actual'=>1,'total_time_s'=>0];
+  $progreso = $pr->fetch(PDO::FETCH_ASSOC) ?: ['nivel_actual'=>1,'total_time_s'=>0,'total_puntos'=>0];
 
   json_out(['success'=>true,'user'=>['key'=>$uakey,'nick'=>$row['nick'],'email'=>$row['email'],'fecha_registro'=>$row['fecha_registro']], 'progreso'=>$progreso]);
 }

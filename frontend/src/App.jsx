@@ -1238,28 +1238,18 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
             
             if (!isPracticeMode && !isRetry) {
-              const nuevoTotalPuntos = totalPuntos + puntos;
-              setTotalPuntos(nuevoTotalPuntos);
-              if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+              // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
+              // const nuevoTotalPuntos = totalPuntos + puntos;
+              // setTotalPuntos(nuevoTotalPuntos);
+              // if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+              
               // Actualizar currentLevel al avanzar
               if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
               levelWonRef.current = true; // Marcar que ya ganamos este nivel
             }
             
-            // 🔥 GUARDAR PROGRESO: Local primero (siempre), luego servidor (si hay conexión)
-            const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
-            const tiempoAGuardar = spent;
-            const puntosAGuardar = puntos;
-            
-            // 1️⃣ Guardar LOCAL (siempre, funciona offline)
-            if (typeof onLocalProgressSave === 'function') {
-              onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
-            }
-            
-            // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
-            if (typeof onSyncToServer === 'function') {
-              onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
-            }
+            // ⚠️ NO GUARDAR AQUÍ - Se guarda cuando el usuario hace click en "Siguiente nivel"
+            // El usuario puede reintentar el nivel, así que no guardamos hasta confirmar con "Siguiente"
           }
         } catch (_) {}
       }
@@ -1830,28 +1820,18 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                 const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
                 
                 if (!isPracticeMode && !isRetry) {
-                  const nuevoTotalPuntos = totalPuntos + puntos;
-                  setTotalPuntos(nuevoTotalPuntos);
-                  if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+                  // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
+                  // const nuevoTotalPuntos = totalPuntos + puntos;
+                  // setTotalPuntos(nuevoTotalPuntos);
+                  // if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+                  
                   // Actualizar currentLevel al avanzar
                   if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
                   levelWonRef.current = true; // Marcar que ya ganamos este nivel
                 }
                 
-                // 🔥 GUARDAR PROGRESO: Local primero (siempre), luego servidor (si hay conexión)
-                const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
-                const tiempoAGuardar = spent;
-                const puntosAGuardar = puntos;
-                
-                // 1️⃣ Guardar LOCAL (siempre, funciona offline)
-                if (typeof onLocalProgressSave === 'function') {
-                  onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
-                }
-                
-                // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
-                if (typeof onSyncToServer === 'function') {
-                  onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
-                }
+                // ⚠️ NO GUARDAR AQUÍ - Se guarda cuando el usuario hace click en "Siguiente nivel"
+                // El usuario puede reintentar el nivel, así que no guardamos hasta confirmar con "Siguiente"
               }
             } catch (_) { /* opcional: mostrar un aviso suave */ }
           }
@@ -1880,6 +1860,35 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   }
 
   function nextLevel(){
+    // 🔥 CALCULAR Y ACTUALIZAR PUNTOS del nivel recién ganado
+    const isPracticeMode = practiceModeLevel !== null;
+    const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+    const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
+    const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+    
+    // Actualizar puntos en pantalla
+    if (puntosDelNivel > 0) {
+      setTotalPuntos(nuevoTotalPuntos);
+      if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+    }
+    
+    // 🔥 GUARDAR PROGRESO antes de avanzar (confirmación del usuario)
+    const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
+    const tiempoAGuardar = time;
+    const puntosAGuardar = nuevoTotalPuntos; // Usar los puntos actualizados
+    
+    console.log(`📊 [SAVE NEXT] Guardando progreso al hacer click en Siguiente - Nivel: ${nivelAGuardar}, Tiempo: ${tiempoAGuardar}, Puntos del nivel: ${puntosDelNivel}, Total puntos: ${puntosAGuardar}`);
+    
+    // 1️⃣ Guardar LOCAL (siempre, funciona offline)
+    if (typeof onLocalProgressSave === 'function') {
+      onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+    }
+    
+    // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
+    if (typeof onSyncToServer === 'function') {
+      onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+    }
+    
     setWin(false); setLose(false); setGameComplete(false);
     const nl = level + 1;
     // Si el siguiente nivel es mayor que el nivel actual de progreso, salir del modo práctica
@@ -2783,14 +2792,16 @@ export default function App(){
   const [restartTrigger, setRestartTrigger] = useState(0); // ✅ Trigger para forzar reinicio de nivel
   
   // 🔥 CARGAR PROGRESO LOCAL al iniciar
-  useEffect(() => {
-    const localProgress = getLocalProgress();
-    setLevel(localProgress.nivel_actual);
-    setCurrentLevel(localProgress.nivel_actual);
-    setTotalTime(localProgress.total_time_s);
-    setTotalPuntos(localProgress.total_puntos);
-    console.log('📱 Progreso local cargado:', localProgress);
-  }, []);
+  // ⚠️ COMENTADO: El progreso se carga desde el servidor en Intro (auto-login)
+  // Si se carga aquí, sobrescribe los puntos del servidor con los puntos locales desactualizados
+  // useEffect(() => {
+  //   const localProgress = getLocalProgress();
+  //   setLevel(localProgress.nivel_actual);
+  //   setCurrentLevel(localProgress.nivel_actual);
+  //   setTotalTime(localProgress.total_time_s);
+  //   setTotalPuntos(localProgress.total_puntos);
+  //   console.log('📱 Progreso local cargado:', localProgress);
+  // }, []);
 
   useEffect(()=>{ 
     window.LumetrixTest = Object.assign({}, window.LumetrixTest, { help:'LumetrixTest.start(), .tapExpected(), .state() — tras pulsar Jugar' }); 
