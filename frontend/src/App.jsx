@@ -549,6 +549,9 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
         console.log('✅ [INTRO] Sesión activa:', data.user?.nick);
         setUserInfo(data.user);
         
+        // ✅ FIX: Guardar sesión en window.currentUser para que sincronización funcione
+        window.currentUser = data.user;
+        
         // ✅ APLICAR PROGRESO DEL SERVIDOR
         if (data.progreso) {
           console.log('📊 [INTRO] Aplicando progreso del servidor:', data.progreso);
@@ -578,6 +581,9 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
             if (loginResult && loginResult.success) {
               console.log('✅ [INTRO] Auto-login exitoso!');
               setUserInfo(loginResult.user);
+              
+              // ✅ FIX: Guardar sesión en window.currentUser para que sincronización funcione
+              window.currentUser = loginResult.user;
               
               // ✅ APLICAR PROGRESO DEL SERVIDOR
               if (loginResult.progreso) {
