@@ -23,3 +23,4 @@ foreach (headers_list() as $header) {
 echo "\n✅ Si ves 'Access-Control-Allow-Origin' arriba, CORS está funcionando\n";
 
 
+

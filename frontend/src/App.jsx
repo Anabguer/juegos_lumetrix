@@ -298,6 +298,8 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
   };
 
   // Control de visibilidad: pausar música cuando la app va a segundo plano
+  // ⚠️ TEMPORALMENTE DESACTIVADO - Causaba que el audio se cortara constantemente
+  /*
   useEffect(() => {
     // Capacitor: appStateChange (solo para móviles)
     let appStateListener;
@@ -328,6 +330,7 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
       }
     };
   }, [musicOn]);
+  */
 
   return {
     start: ()=>{ 

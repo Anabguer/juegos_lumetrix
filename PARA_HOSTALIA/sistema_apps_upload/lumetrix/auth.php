@@ -73,7 +73,14 @@ if ($act === 'check_session') {
   $st->execute([uakey(), 'lumetrix']);
   $u = $st->fetch(PDO::FETCH_ASSOC);
   if (!$u) json_out(['success'=>false]);
-  json_out(['success'=>true,'uakey'=>uakey(),'user'=>['key'=>uakey()] + $u]);
+  
+  // Obtener progreso del servidor (igual que en login)
+  $pdo->prepare('INSERT IGNORE INTO lumetrix_progreso (usuario_aplicacion_key) VALUES (?)')->execute([uakey()]);
+  $pr = $pdo->prepare('SELECT nivel_actual, total_time_s, total_puntos FROM lumetrix_progreso WHERE usuario_aplicacion_key=?');
+  $pr->execute([uakey()]);
+  $progreso = $pr->fetch(PDO::FETCH_ASSOC) ?: ['nivel_actual'=>1,'total_time_s'=>0,'total_puntos'=>0];
+  
+  json_out(['success'=>true,'uakey'=>uakey(),'user'=>['key'=>uakey()] + $u, 'progreso'=>$progreso]);
 }
 
 if ($act === 'logout') {
