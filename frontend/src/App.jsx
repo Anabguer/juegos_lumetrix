@@ -904,13 +904,15 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       const doubleCount = 1;  // SIEMPRE 1 ficha de doble toque
       const touchCount = totalTiles - dragCount - doubleCount; // Resto toque normal
       
-      // Crear sets para cada tipo
-      const allIndices = Array.from({length: totalTiles}, (_, i) => i);
+      // ✅ FIX: NUNCA la primera ficha (índice 0) puede ser especial
+      // Crear sets para cada tipo, excluyendo el índice 0
+      const allIndices = Array.from({length: totalTiles - 1}, (_, i) => i + 1); // Índices 1, 2, 3...
       const shuffled = [...allIndices].sort(() => Math.random() - 0.5);
       
       const dragTiles = new Set(shuffled.slice(0, dragCount));
       const doubleTiles = new Set(shuffled.slice(dragCount, dragCount + doubleCount));
-      const touchTiles = new Set(shuffled.slice(dragCount + doubleCount));
+      // La primera ficha (0) siempre será toque normal
+      const touchTiles = new Set([0, ...shuffled.slice(dragCount + doubleCount)]);
       
       setComboDragTiles(dragTiles);
       setComboDoubleTiles(doubleTiles);
@@ -937,9 +939,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
       const numDoubleTiles = 1; // Siempre 1 ficha de doble toque para empezar
       const doubleTiles = new Set();
       
-      // Crear fichas de doble toque únicas
+      // ✅ FIX: NUNCA la primera ficha (índice 0) puede ser especial
+      // Crear fichas de doble toque únicas, excluyendo el índice 0
       while (doubleTiles.size < numDoubleTiles) {
-        const randomIndex = Math.floor(Math.random() * config.tiles);
+        const randomIndex = 1 + Math.floor(Math.random() * (config.tiles - 1)); // Índices 1 a tiles-1
         doubleTiles.add(randomIndex);
       }
       doubleTouchTilesRef.current = doubleTiles;
