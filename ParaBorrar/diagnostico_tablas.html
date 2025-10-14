@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Diagnóstico de Tablas - Lumetrix vs MemoFlip [v2.0]</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #39ff14;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        h2 {
+            color: #ff00ff;
+            margin-top: 30px;
+        }
+        .section {
+            background: #111;
+            border: 2px solid #39ff14;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th {
+            background: #222;
+            color: #00ffff;
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #00ffff;
+        }
+        td {
+            padding: 8px;
+            border: 1px solid #39ff14;
+        }
+        tr:nth-child(even) {
+            background: #0a0a0a;
+        }
+        .error {
+            color: #ff4466;
+            background: #331111;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ff4466;
+        }
+        .success {
+            color: #39ff14;
+        }
+        .warning {
+            color: #ffd700;
+        }
+        button {
+            background: #39ff14;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #00ffff;
+        }
+        pre {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #39ff14;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 DIAGNÓSTICO DE TABLAS - LUMETRIX vs MEMOFLIP</h1>
+
+    <div class="section">
+        <h2>📊 Últimos Usuarios en usuarios_aplicaciones</h2>
+        <button onclick="cargarUsuariosApp()">🔄 Cargar Usuarios</button>
+        <div id="usuarios-app"></div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Usuarios de Lumetrix (app_codigo = 'lumetrix')</h2>
+        <button onclick="cargarLumetrixUsers()">🔄 Cargar Lumetrix</button>
+        <div id="lumetrix-users"></div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Usuarios de MemoFlip (app_codigo = 'memoflip')</h2>
+        <button onclick="cargarMemoFlipUsers()">🔄 Cargar MemoFlip</button>
+        <div id="memoflip-users"></div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Tabla memoflip_usuarios (si existe)</h2>
+        <button onclick="cargarMemoFlipTabla()">🔄 Cargar memoflip_usuarios</button>
+        <div id="memoflip-tabla"></div>
+    </div>
+
+    <div class="section">
+        <h2>📊 Progreso Lumetrix</h2>
+        <button onclick="cargarProgresoLumetrix()">🔄 Cargar Progreso</button>
+        <div id="progreso-lumetrix"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://colisan.com/sistema_apps_upload/lumetrix/';
+
+        async function query(sql) {
+            try {
+                const formData = new FormData();
+                formData.append('query', sql);
+                
+                console.log('🔍 Consultando:', API_BASE + 'diagnostico_api.php');
+                console.log('📝 SQL:', sql);
+                
+                const response = await fetch(API_BASE + 'diagnostico_api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', response.headers.get('content-type'));
+                
+                // Obtener el texto primero para debuggear
+                const text = await response.text();
+                console.log('📄 Response text:', text.substring(0, 200));
+                
+                // Intentar parsear como JSON
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('❌ Error parseando JSON:', e);
+                    return { error: 'Respuesta no es JSON válido: ' + text.substring(0, 100) };
+                }
+            } catch (error) {
+                console.error('❌ Error en query:', error);
+                return { error: error.message };
+            }
+        }
+
+        function renderTable(data, containerId) {
+            const container = document.getElementById(containerId);
+            
+            if (!data || data.error) {
+                container.innerHTML = `<div class="error">❌ Error: ${data?.error || 'Sin datos'}</div>`;
+                return;
+            }
+
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = `<div class="warning">⚠️ No hay datos</div>`;
+                return;
+            }
+
+            const headers = Object.keys(data.results[0]);
+            let html = '<table><tr>';
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += '</tr>';
+
+            data.results.forEach(row => {
+                html += '<tr>';
+                headers.forEach(h => {
+                    let val = row[h];
+                    if (val === null) val = '<span style="opacity:0.5">NULL</span>';
+                    html += `<td>${val}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</table>';
+            html += `<p class="success">✅ ${data.results.length} registros encontrados</p>`;
+            container.innerHTML = html;
+        }
+
+        async function cargarUsuariosApp() {
+            const sql = `
+                SELECT usuario_aplicacion_id, usuario_aplicacion_key, email, nick, app_codigo, 
+                       activo, fecha_registro, verified_at
+                FROM usuarios_aplicaciones 
+                ORDER BY fecha_registro DESC 
+                LIMIT 10
+            `;
+            const data = await query(sql);
+            renderTable(data, 'usuarios-app');
+        }
+
+        async function cargarLumetrixUsers() {
+            const sql = `
+                SELECT usuario_aplicacion_id, usuario_aplicacion_key, email, nick, 
+                       activo, fecha_registro, verified_at
+                FROM usuarios_aplicaciones 
+                WHERE app_codigo = 'lumetrix'
+                ORDER BY fecha_registro DESC 
+                LIMIT 10
+            `;
+            const data = await query(sql);
+            renderTable(data, 'lumetrix-users');
+        }
+
+        async function cargarMemoFlipUsers() {
+            const sql = `
+                SELECT usuario_aplicacion_id, usuario_aplicacion_key, email, nick, 
+                       activo, fecha_registro, verified_at
+                FROM usuarios_aplicaciones 
+                WHERE app_codigo = 'memoflip'
+                ORDER BY fecha_registro DESC 
+                LIMIT 10
+            `;
+            const data = await query(sql);
+            renderTable(data, 'memoflip-users');
+        }
+
+        async function cargarMemoFlipTabla() {
+            const sql = `
+                SELECT * FROM memoflip_usuarios 
+                ORDER BY id DESC 
+                LIMIT 10
+            `;
+            const data = await query(sql);
+            renderTable(data, 'memoflip-tabla');
+        }
+
+        async function cargarProgresoLumetrix() {
+            const sql = `
+                SELECT p.*, u.email, u.nick 
+                FROM lumetrix_progreso p
+                LEFT JOIN usuarios_aplicaciones u ON p.usuario_aplicacion_key = u.usuario_aplicacion_key
+                WHERE u.app_codigo = 'lumetrix'
+                ORDER BY p.nivel_actual DESC
+                LIMIT 10
+            `;
+            const data = await query(sql);
+            renderTable(data, 'progreso-lumetrix');
+        }
+
+        // Cargar todo automáticamente
+        window.addEventListener('DOMContentLoaded', () => {
+            cargarUsuariosApp();
+            cargarLumetrixUsers();
+            cargarMemoFlipUsers();
+            cargarMemoFlipTabla();
+            cargarProgresoLumetrix();
+        });
+    </script>
+</body>
+</html>
+

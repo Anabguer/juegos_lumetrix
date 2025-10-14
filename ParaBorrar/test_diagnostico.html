@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Diagnóstico API</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #000; color: #0f0; }
+        pre { background: #222; padding: 10px; border: 1px solid #0f0; overflow: auto; }
+        button { background: #0f0; color: #000; padding: 10px; margin: 5px; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Diagnóstico API</h1>
+    
+    <button onclick="testAPI()">🚀 Test API</button>
+    <button onclick="testDirect()">🔗 Test URL Directa</button>
+    
+    <h2>Resultado:</h2>
+    <pre id="output"></pre>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        async function testAPI() {
+            output.textContent = '⏳ Cargando...\n';
+            
+            try {
+                const url = 'https://colisan.com/sistema_apps_upload/lumetrix/diagnostico_api.php';
+                output.textContent += `URL: ${url}\n\n`;
+                
+                const formData = new FormData();
+                formData.append('query', 'SELECT COUNT(*) as total FROM usuarios_aplicaciones WHERE app_codigo = "lumetrix"');
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                output.textContent += `Status: ${response.status}\n`;
+                output.textContent += `Content-Type: ${response.headers.get('content-type')}\n\n`;
+                
+                const text = await response.text();
+                output.textContent += `Response:\n${text}\n\n`;
+                
+                try {
+                    const json = JSON.parse(text);
+                    output.textContent += `✅ JSON válido:\n${JSON.stringify(json, null, 2)}`;
+                } catch (e) {
+                    output.textContent += `❌ NO es JSON válido:\n${e.message}`;
+                }
+                
+            } catch (error) {
+                output.textContent += `❌ Error: ${error.message}`;
+            }
+        }
+        
+        function testDirect() {
+            window.open('https://colisan.com/sistema_apps_upload/lumetrix/diagnostico_api.php', '_blank');
+        }
+        
+        // Auto-ejecutar
+        testAPI();
+    </script>
+</body>
+</html>
+

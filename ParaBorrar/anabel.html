@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anabel - Lumetrix</title>
+    <style>
+        body { 
+            font-family: 'Arial', sans-serif; 
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            color: #e0e0e0; 
+            text-align: center; 
+            padding: 50px; 
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { 
+            background: rgba(42, 42, 74, 0.9);
+            border-radius: 20px; 
+            padding: 40px; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.4);
+            border: 2px solid rgba(57, 255, 20, 0.3);
+        }
+        h1 { 
+            color: #00ffff; 
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        p { 
+            margin-bottom: 15px; 
+            font-size: 1.1em;
+        }
+        strong { 
+            color: #39ff14; 
+            text-shadow: 0 0 5px rgba(57, 255, 20, 0.3);
+        }
+        .highlight {
+            background: rgba(57, 255, 20, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(57, 255, 20, 0.3);
+            margin: 20px 0;
+        }
+        .neon-text {
+            color: #ff6b6b;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 Anabel.html 🌟</h1>
+        
+        <div class="highlight">
+            <p>Este archivo está en la ruta:</p>
+            <p><strong>/lumetrix/anabel.html</strong></p>
+            <p>URL completa: <strong id="currentUrl"></strong></p>
+        </div>
+        
+        <p>¡Hola <span class="neon-text">Anabel</span>! 👋</p>
+        <p>Confirmación de que el archivo se subió correctamente.</p>
+        <p>Fecha y hora actual: <strong id="datetime"></strong></p>
+        
+        <div class="highlight">
+            <p>🎮 <strong>Lumetrix</strong> está funcionando perfectamente</p>
+            <p>📍 Ubicación correcta: <strong>/lumetrix/</strong></p>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('datetime').textContent = new Date().toLocaleString('es-ES');
+    </script>
+</body>
+</html>
