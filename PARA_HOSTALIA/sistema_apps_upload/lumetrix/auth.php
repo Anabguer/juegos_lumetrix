@@ -25,7 +25,7 @@ if ($act === 'register') {
   
   $now = date('Y-m-d H:i:s');
   $ins = $pdo->prepare('INSERT INTO usuarios_aplicaciones
-    (usuario_aplicacion_key,email,nombre,nick,password_hash,app_codigo,fecha_registro,ultimo_acceso,activo,created_at,codigo_verificacion,tiempo_verificacion)
+    (usuario_aplicacion_key,email,nombre,nick,password_hash,app_codigo,fecha_registro,ultimo_acceso,activo,created_at,verification_code,verification_expiry)
     VALUES (?,?,?,?,?,?, ?, ?, 0, ?, ?, ?)');
   $ins->execute([$uakey,$email,$nombre,$nick,password_hash($pass,PASSWORD_BCRYPT),'lumetrix',$now,$now,$now,$codigo,$verification_expiry]);
 
@@ -78,10 +78,10 @@ if ($act === 'login') {
   if (!$row || !password_verify($pass, $row['password_hash'])) json_out(['success'=>false,'message'=>'credenciales inválidas']);
 
   // Verificar que el email esté verificado
-  $verif = $pdo->prepare('SELECT email_verificado FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=?');
+  $verif = $pdo->prepare('SELECT verified_at FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=?');
   $verif->execute([$uakey]);
   $verif_row = $verif->fetch(PDO::FETCH_ASSOC);
-  if ($verif_row && $verif_row['email_verificado'] == 0) {
+  if ($verif_row && $verif_row['verified_at'] === NULL) {
     json_out(['success'=>false,'message'=>'Debes verificar tu email antes de iniciar sesión','requires_verification'=>true,'email'=>$row['email']]);
   }
 
@@ -123,18 +123,18 @@ if ($act === 'verify_code') {
   $pdo = db();
   $uakey = uakey_from_email($email, 'lumetrix');
   
-  $st = $pdo->prepare('SELECT codigo_verificacion, tiempo_verificacion FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND email_verificado=0');
+  $st = $pdo->prepare('SELECT verification_code, verification_expiry FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND verified_at IS NULL');
   $st->execute([$uakey, 'lumetrix']);
   $usuario = $st->fetch(PDO::FETCH_ASSOC);
   
   if (!$usuario) json_out(['success'=>false,'error'=>'Usuario no encontrado o ya verificado']);
   
-  if ($usuario['codigo_verificacion'] !== $codigo) json_out(['success'=>false,'error'=>'Código incorrecto']);
+  if ($usuario['verification_code'] !== $codigo) json_out(['success'=>false,'error'=>'Código incorrecto']);
   
-  if (!codigoEsValido($usuario['tiempo_verificacion'])) json_out(['success'=>false,'error'=>'El código ha expirado. Solicita uno nuevo.']);
+  if (!codigoEsValido($usuario['verification_expiry'])) json_out(['success'=>false,'error'=>'El código ha expirado. Solicita uno nuevo.']);
   
   // Activar cuenta
-  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET email_verificado=1, activo=1, codigo_verificacion=NULL WHERE usuario_aplicacion_key=?');
+  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET verified_at=NOW(), activo=1, verification_code=NULL WHERE usuario_aplicacion_key=?');
   $upd->execute([$uakey]);
   
   json_out(['success'=>true,'message'=>'¡Cuenta verificada correctamente!','verified'=>true,'user_key'=>$uakey]);
@@ -149,7 +149,7 @@ if ($act === 'resend_code') {
   $pdo = db();
   $uakey = uakey_from_email($email, 'lumetrix');
   
-  $st = $pdo->prepare('SELECT nombre FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND email_verificado=0');
+  $st = $pdo->prepare('SELECT nombre FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND verified_at IS NULL');
   $st->execute([$uakey, 'lumetrix']);
   $usuario = $st->fetch(PDO::FETCH_ASSOC);
   
@@ -159,7 +159,7 @@ if ($act === 'resend_code') {
   $codigo = generarCodigoVerificacion();
   $verification_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
   
-  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET codigo_verificacion=?, tiempo_verificacion=? WHERE usuario_aplicacion_key=?');
+  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET verification_code=?, verification_expiry=? WHERE usuario_aplicacion_key=?');
   $upd->execute([$codigo, $verification_expiry, $uakey]);
   
   // Enviar email

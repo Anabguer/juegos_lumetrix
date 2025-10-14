@@ -2399,13 +2399,15 @@ function Auth({ onClose }){
   const savedToken = localStorage.getItem('lum_user_token') || '';
   const savedPassword = savedToken ? atob(savedToken) : '';
   
-  const [mode, setMode] = useState('login'); // 'login' o 'register'
+  const [mode, setMode] = useState('login'); // 'login', 'register' o 'verify'
   const [username, setUsername] = useState('');
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState(savedEmail); // ✅ Pre-rellenado
   const [password, setPassword] = useState(savedPassword); // ✅ Pre-rellenado
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [debugCode, setDebugCode] = useState(''); // Para mostrar el código si el email falla
 
   const handleRegister = async () => {
     if (!nombre || !username || !email || !password) {
@@ -2422,7 +2424,14 @@ function Auth({ onClose }){
         body: JSON.stringify({ nombre, username, email, password })
       });
       
-      if (result.success) {
+      if (result.success && result.requires_verification) {
+        // Cambiar a modo verificación
+        setMode('verify');
+        setDebugCode(result.debug_code || '');
+        setMessage(result.debug_code 
+          ? `📧 Email enviado a ${email}. Código de prueba: ${result.debug_code}` 
+          : `📧 Revisa tu email (${email}) para obtener el código de verificación`);
+      } else if (result.success) {
         setMessage('✅ ¡Registrado! Ahora inicia sesión');
         setMode('login');
         setPassword('');
@@ -2465,8 +2474,69 @@ function Auth({ onClose }){
         setTimeout(() => {
           window.location.reload(); // Recargar para actualizar estado
         }, 500);
+      } else if (result.requires_verification) {
+        // El usuario no ha verificado su email
+        setMode('verify');
+        setMessage('⚠️ Debes verificar tu email antes de iniciar sesión. Revisa tu bandeja de entrada.');
       } else {
         setMessage('❌ ' + (result.message || 'Credenciales incorrectas'));
+      }
+    } catch (e) {
+      setMessage('❌ Error de conexión');
+    }
+    
+    setLoading(false);
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      setMessage('❌ El código debe tener 6 dígitos');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=verify_code', {
+        method: 'POST',
+        body: JSON.stringify({ email, codigo: verificationCode })
+      });
+      
+      if (result.success) {
+        setMessage('✅ ¡Cuenta verificada! Ya puedes iniciar sesión');
+        setTimeout(() => {
+          setMode('login');
+          setVerificationCode('');
+          setDebugCode('');
+        }, 1500);
+      } else {
+        setMessage('❌ ' + (result.error || 'Código incorrecto'));
+      }
+    } catch (e) {
+      setMessage('❌ Error de conexión');
+    }
+    
+    setLoading(false);
+  };
+
+  const handleResendCode = async () => {
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=resend_code', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      
+      if (result.success) {
+        setDebugCode(result.debug_code || '');
+        setMessage(result.debug_code 
+          ? `📧 Código reenviado. Código de prueba: ${result.debug_code}` 
+          : '📧 Código reenviado a tu email');
+      } else {
+        setMessage('❌ ' + (result.error || 'Error al reenviar código'));
       }
     } catch (e) {
       setMessage('❌ Error de conexión');
@@ -2479,8 +2549,80 @@ function Auth({ onClose }){
     <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
       <button className="closer" onClick={onClose} style={{border:'2px solid #ff00ff',boxShadow:'0 0 10px #ff00ff',background:'#000'}}>✕</button>
       
-      {/* Login/Registro */}
-      <>
+      {mode === 'verify' ? (
+        /* Modal de verificación */
+        <>
+          <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px', textAlign:'center' }}>
+            🔐 Verificación de Email
+          </h3>
+          
+          <div className="list" style={{gap:12}}>
+            <p style={{fontSize:14,textAlign:'center',color:'#ffffff99',lineHeight:'1.5'}}>
+              Introduce el código de 6 dígitos que hemos enviado a:<br/>
+              <strong style={{color:'#ff00ff'}}>{email}</strong>
+            </p>
+            
+            <input 
+              placeholder="Código (6 dígitos)" 
+              type="text"
+              maxLength="6"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+              onKeyPress={(e) => e.key === 'Enter' && handleVerifyCode()}
+              style={{ 
+                background:'rgba(255,0,255,0.1)', 
+                border:'2px solid #ff00ff33', 
+                borderRadius:10, 
+                padding:12, 
+                color:'#fff', 
+                boxShadow:'0 0 10px #ff00ff22', 
+                outline:'none',
+                fontSize:'20px',
+                textAlign:'center',
+                letterSpacing:'4px'
+              }} 
+            />
+            
+            {message && (
+              <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('✅') ? '#39ff14' : (message.includes('📧') ? '#00ffff' : '#ff4466')}}>
+                {message}
+              </div>
+            )}
+            
+            <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8,flexDirection:'column'}}>
+              <button 
+                className="btn btn1" 
+                onClick={handleVerifyCode}
+                disabled={loading || verificationCode.length !== 6}
+                style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:(loading || verificationCode.length !== 6)?0.5:1}}
+              >
+                {loading ? 'Verificando...' : 'Verificar código'}
+              </button>
+              
+              <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+                <button 
+                  className="btn" 
+                  onClick={handleResendCode}
+                  disabled={loading}
+                  style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1,fontSize:'12px'}}
+                >
+                  Reenviar código
+                </button>
+                <button 
+                  className="btn" 
+                  onClick={() => { setMode('login'); setVerificationCode(''); setDebugCode(''); }}
+                  disabled={loading}
+                  style={{border:'2px solid #ffffff66',color:'#ffffff66',boxShadow:'0 0 10px #ffffff22',fontWeight:'bold',opacity:loading?0.5:1,fontSize:'12px'}}
+                >
+                  Volver
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Login/Registro */
+        <>
           {/* Tabs */}
           <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
             <button 
@@ -2517,65 +2659,66 @@ function Auth({ onClose }){
             {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
           </h3>
       
-      <div className="list" style={{gap:12}}>
-        {mode === 'register' && (
-          <>
+          <div className="list" style={{gap:12}}>
+            {mode === 'register' && (
+              <>
+                <input 
+                  placeholder="Nombre completo" 
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+                />
+                <input 
+                  placeholder="Nick (nombre de usuario)" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+                />
+              </>
+            )}
             <input 
-              placeholder="Nombre completo" 
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Email" 
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
             />
             <input 
-              placeholder="Nick (nombre de usuario)" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Contraseña" 
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
               style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
             />
-          </>
-        )}
-        <input 
-          placeholder="Email" 
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
-        />
-        <input 
-          placeholder="Contraseña" 
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
-          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
-        />
-        
-        {message && (
-          <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('✅') ? '#39ff14' : '#ff4466'}}>
-            {message}
+            
+            {message && (
+              <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('✅') ? '#39ff14' : '#ff4466'}}>
+                {message}
+              </div>
+            )}
+            
+            <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8}}>
+              <button 
+                className="btn btn1" 
+                onClick={mode === 'login' ? handleLogin : handleRegister}
+                disabled={loading}
+                style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
+              >
+                {loading ? 'Cargando...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
+              </button>
+              <button 
+                className="btn" 
+                onClick={onClose}
+                disabled={loading}
+                style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1}}
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
-        )}
-        
-        <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8}}>
-          <button 
-            className="btn btn1" 
-            onClick={mode === 'login' ? handleLogin : handleRegister}
-            disabled={loading}
-            style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
-          >
-            {loading ? 'Cargando...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
-          </button>
-          <button 
-            className="btn" 
-            onClick={onClose}
-            disabled={loading}
-            style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1}}
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
         </>
+      )}
     </div></div>
   );
 }

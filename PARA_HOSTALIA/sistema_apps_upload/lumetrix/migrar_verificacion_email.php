@@ -14,16 +14,39 @@ echo "<hr>";
 try {
     $pdo = db();
     
-    // 1. Agregar columnas
-    echo "<h3>📝 Paso 1: Agregando columnas...</h3>";
-    $sql = "ALTER TABLE usuarios_aplicaciones 
-            ADD COLUMN IF NOT EXISTS email_verificado TINYINT(1) DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS codigo_verificacion VARCHAR(10) DEFAULT NULL,
-            ADD COLUMN IF NOT EXISTS tiempo_verificacion TIMESTAMP NULL DEFAULT NULL,
-            ADD COLUMN IF NOT EXISTS intentos_verificacion INT DEFAULT 0";
+    // 1. Verificar/Agregar columnas (solo si NO existen)
+    echo "<h3>📝 Paso 1: Verificando/Agregando columnas...</h3>";
     
-    $pdo->exec($sql);
-    echo "<p>✅ Columnas agregadas/verificadas correctamente</p>";
+    // Verificar columnas existentes
+    $columns = $pdo->query("SHOW COLUMNS FROM usuarios_aplicaciones")->fetchAll(PDO::FETCH_COLUMN);
+    $columnas_existentes = array_column($columns, 0);
+    
+    $columnas_necesarias = ['email_verificado', 'codigo_verificacion', 'tiempo_verificacion'];
+    $columnas_faltantes = [];
+    
+    foreach ($columnas_necesarias as $col) {
+        if (!in_array($col, $columnas_existentes)) {
+            $columnas_faltantes[] = $col;
+        }
+    }
+    
+    if (empty($columnas_faltantes)) {
+        echo "<p>✅ Todas las columnas YA EXISTEN. No es necesario agregar nada.</p>";
+    } else {
+        // Agregar solo las faltantes
+        if (in_array('email_verificado', $columnas_faltantes)) {
+            $pdo->exec("ALTER TABLE usuarios_aplicaciones ADD COLUMN email_verificado TINYINT(1) DEFAULT 0");
+            echo "<p>✅ Columna 'email_verificado' agregada</p>";
+        }
+        if (in_array('codigo_verificacion', $columnas_faltantes)) {
+            $pdo->exec("ALTER TABLE usuarios_aplicaciones ADD COLUMN codigo_verificacion VARCHAR(10) DEFAULT NULL");
+            echo "<p>✅ Columna 'codigo_verificacion' agregada</p>";
+        }
+        if (in_array('tiempo_verificacion', $columnas_faltantes)) {
+            $pdo->exec("ALTER TABLE usuarios_aplicaciones ADD COLUMN tiempo_verificacion TIMESTAMP NULL DEFAULT NULL");
+            echo "<p>✅ Columna 'tiempo_verificacion' agregada</p>";
+        }
+    }
     
     // 2. Marcar usuarios existentes como verificados
     echo "<h3>📝 Paso 2: Marcando usuarios existentes como verificados...</h3>";
