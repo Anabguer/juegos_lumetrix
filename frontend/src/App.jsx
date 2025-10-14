@@ -1866,10 +1866,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
     const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
     
-    // Actualizar puntos en pantalla
-    if (puntosDelNivel > 0) {
-      setTotalPuntos(nuevoTotalPuntos);
-      if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
+    // Actualizar puntos en pantalla (SIEMPRE, para que se vea en el header)
+    setTotalPuntos(nuevoTotalPuntos);
+    if (typeof onPuntosUpdate === 'function') {
+      onPuntosUpdate(nuevoTotalPuntos); // Actualizar en el padre (App)
     }
     
     // 🔥 GUARDAR PROGRESO antes de avanzar (confirmación del usuario)
