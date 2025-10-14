@@ -116,13 +116,13 @@
     </div>
 
     <script>
-        const API_BASE = 'https://colisan.com/sistema_apps_upload/';
+        const API_BASE = 'https://colisan.com/sistema_apps_upload/lumetrix/';
 
         async function query(sql) {
             const formData = new FormData();
             formData.append('query', sql);
             
-            const response = await fetch(API_BASE + 'lumetrix/admin_db.php', {
+            const response = await fetch(API_BASE + 'diagnostico_api.php', {
                 method: 'POST',
                 body: formData
             });
