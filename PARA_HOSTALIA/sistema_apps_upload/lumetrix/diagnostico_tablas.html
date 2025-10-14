@@ -119,15 +119,36 @@
         const API_BASE = 'https://colisan.com/sistema_apps_upload/lumetrix/';
 
         async function query(sql) {
-            const formData = new FormData();
-            formData.append('query', sql);
-            
-            const response = await fetch(API_BASE + 'diagnostico_api.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            return await response.json();
+            try {
+                const formData = new FormData();
+                formData.append('query', sql);
+                
+                console.log('🔍 Consultando:', API_BASE + 'diagnostico_api.php');
+                console.log('📝 SQL:', sql);
+                
+                const response = await fetch(API_BASE + 'diagnostico_api.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', response.headers.get('content-type'));
+                
+                // Obtener el texto primero para debuggear
+                const text = await response.text();
+                console.log('📄 Response text:', text.substring(0, 200));
+                
+                // Intentar parsear como JSON
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('❌ Error parseando JSON:', e);
+                    return { error: 'Respuesta no es JSON válido: ' + text.substring(0, 100) };
+                }
+            } catch (error) {
+                console.error('❌ Error en query:', error);
+                return { error: error.message };
+            }
         }
 
         function renderTable(data, containerId) {

@@ -4,9 +4,19 @@
  * Solo permite SELECT para seguridad
  */
 
+// Silenciar warnings para que no contaminen el JSON
+error_reporting(E_ERROR | E_PARSE);
+ini_set('display_errors', '0');
+
+// Limpiar cualquier output previo
+ob_start();
+
 require_once __DIR__.'/_common.php';
 
-header('Content-Type: application/json');
+// Limpiar buffer y empezar limpio
+ob_end_clean();
+
+header('Content-Type: application/json; charset=utf-8');
 
 // Verificar que sea POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
