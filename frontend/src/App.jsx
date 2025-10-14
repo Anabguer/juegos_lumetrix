@@ -231,29 +231,68 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
       });
     }catch{}
   };
-  // Audio de fondo
+  // Audio de fondo - FIX MEMOFLIP: Cargar completamente antes de reproducir
   const initBgAudio = () => {
     if (bgAudioRef.current) return;
-    try {
-      const audio = new Audio(getAssetPath('lumetrix/audio/audiofondo.mp3'));
-      audio.loop = true;
-      audio.volume = volume;
-      audio.preload = 'auto';
-      
-      // Audio configurado para funcionamiento natural
-
-      bgAudioRef.current = audio;
-    } catch (e) {
-      console.error('Error inicializando audio:', e);
-    }
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.loop = true;
+        audio.volume = volume;
+        
+        // ✅ CRÍTICO: Esperar a que el audio esté completamente cargado
+        audio.addEventListener('canplaythrough', () => {
+          console.log('✅ [AUDIO] Música de fondo cargada completamente (duración:', audio.duration + 's)');
+          bgAudioRef.current = audio;
+          resolve(audio);
+        }, { once: true });
+        
+        audio.addEventListener('error', (e) => {
+          console.error('❌ [AUDIO] Error cargando música de fondo:', e);
+          reject(e);
+        });
+        
+        // Listeners de debug
+        audio.addEventListener('ended', () => {
+          console.log('🎵 [AUDIO] Música terminada (no debería pasar si loop=true)');
+        });
+        
+        audio.addEventListener('pause', () => {
+          console.log('⏸️ [AUDIO] Música pausada');
+        });
+        
+        audio.addEventListener('play', () => {
+          console.log('▶️ [AUDIO] Música reproduciendo');
+        });
+        
+        // ✅ IMPORTANTE: Aplicar ruta correcta para APK
+        audio.src = getAssetPath('lumetrix/audio/audiofondo.mp3');
+        
+        // ✅ CRÍTICO: Forzar la carga del archivo
+        audio.load();
+      } catch (e) {
+        console.error('Error inicializando audio:', e);
+        reject(e);
+      }
+    });
   };
 
-  const startBgMusic = (musicEnabled = true) => {
-    if (!musicEnabled || !bgAudioRef.current) return;
+  const startBgMusic = async (musicEnabled = true) => {
+    if (!musicEnabled) return;
+    
     try {
-      bgAudioRef.current.play().catch(e => {
-        console.error('Error reproduciendo audio:', e);
-      });
+      // Si no está inicializado, inicializar primero
+      if (!bgAudioRef.current) {
+        await initBgAudio();
+      }
+      
+      if (bgAudioRef.current) {
+        // ✅ Reproducir después de que esté completamente cargado
+        await bgAudioRef.current.play();
+        console.log('🎵 [AUDIO] Música de fondo iniciada correctamente');
+      }
     } catch (e) {
       console.error('Error iniciando música:', e);
     }
