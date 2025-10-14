@@ -1,0 +1,50 @@
+Líneas 339-372 del archivo frontend/src/App.jsx
+
+BORRAR TODO DESDE:
+  // Control de visibilidad: pausar música cuando la app va a segundo plano
+
+HASTA:
+  */
+
+Y REEMPLAZAR CON:
+  // ✅ Control de visibilidad: pausar música cuando la app va a segundo plano
+  useEffect(() => {
+    let appStateListener;
+    
+    const setupCapacitorListener = async () => {
+      if (!window.Capacitor?.Plugins?.App) return;
+      
+      try {
+        const { App } = window.Capacitor.Plugins;
+        appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
+          if (!bgAudioRef.current) return;
+          
+          if (!isActive) {
+            if (!bgAudioRef.current.paused) {
+              bgAudioRef.current.pause();
+              console.log('🔇 [APP] Música pausada (app en segundo plano)');
+            }
+          } else {
+            if (musicOn && bgAudioRef.current.paused && bgAudioRef.current.src) {
+              bgAudioRef.current.play().catch(e => console.log('❌ [APP] Error reanudando música:', e));
+              console.log('🔊 [APP] Música reanudada (app activa)');
+            }
+          }
+        });
+        
+        console.log('✅ [APP] Listener de estado de app configurado');
+      } catch (e) {
+        console.error('❌ [APP] Error configurando listener:', e);
+      }
+    };
+
+    setupCapacitorListener();
+
+    return () => {
+      if (appStateListener && appStateListener.remove) {
+        appStateListener.remove();
+        console.log('🗑️ [APP] Listener de estado de app removido');
+      }
+    };
+  }, [musicOn]);
+

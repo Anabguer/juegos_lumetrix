@@ -828,13 +828,30 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
 
   // Inicializar audios al cargar (SOLO UNA VEZ al montar)
   const audioInitializedRef = useRef(false);
+  const bgAudioReadyRef = useRef(false);
   
   useEffect(() => {
     if (audioInitializedRef.current) return;
     audioInitializedRef.current = true;
     
-    SFX.initBg();
-    SFX.initStart();
+    // ✅ FIX: Esperar a que el audio de fondo esté completamente cargado
+    const initAudios = async () => {
+      try {
+        await SFX.initBg(); // Esperar a que termine de cargar
+        bgAudioReadyRef.current = true;
+        console.log('🎵 [INIT] Audio de fondo listo para reproducir');
+      } catch (e) {
+        console.error('❌ [INIT] Error inicializando audio de fondo:', e);
+      }
+      
+      try {
+        SFX.initStart(); // No es async, se puede llamar directamente
+      } catch (e) {
+        console.error('❌ [INIT] Error inicializando audio de inicio:', e);
+      }
+    };
+    
+    initAudios();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ Array vacío = solo una vez al montar
 
@@ -844,11 +861,24 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   useEffect(() => {
     if (musicOn && !musicStartedRef.current) {
       musicStartedRef.current = true;
-      // Pequeño delay para asegurar que el audio esté listo
-      const timer = setTimeout(() => {
-        SFX.startBg(true);
-      }, 500);
-      return () => clearTimeout(timer);
+      
+      // ✅ FIX: Esperar a que el audio esté listo antes de reproducir
+      const startMusic = async () => {
+        // Esperar hasta que bgAudioReadyRef sea true
+        let attempts = 0;
+        while (!bgAudioReadyRef.current && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (bgAudioReadyRef.current) {
+          await SFX.startBg(true);
+        } else {
+          console.warn('⚠️ [MUSIC] Timeout esperando audio de fondo');
+        }
+      };
+      
+      startMusic();
     } else if (!musicOn && musicStartedRef.current) {
       musicStartedRef.current = false;
       SFX.stopBg();
