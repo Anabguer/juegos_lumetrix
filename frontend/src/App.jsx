@@ -746,6 +746,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialContent, setTutorialContent] = useState(null);
   const levelWonRef = useRef(false); // Rastrea si ya ganamos este nivel
+  const timeRemainingRef = useRef(0); // Guardar tiempo restante al ganar
   useEffect(()=>{ if(typeof totalProp === 'number') setTotalTime(totalProp); }, [totalProp]);
   useEffect(()=>{ if(typeof puntosProp === 'number') setTotalPuntos(puntosProp); }, [puntosProp]);
 
@@ -1230,18 +1231,18 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         const spent = Math.ceil((Date.now() - startTimeRef.current) / 1000);
         saveTotal(spent);
         
+        // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos después (en nextLevel)
+        timeRemainingRef.current = timeFor(level) - time;
+        console.log(`✅ [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+        
         // Guardar progreso en API (nivel desbloqueado = actual + 1)
         try {
           if (window.LUM_API) {
             const isPracticeMode = practiceModeLevel !== null;
             const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-            const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
             
             if (!isPracticeMode && !isRetry) {
               // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
-              // const nuevoTotalPuntos = totalPuntos + puntos;
-              // setTotalPuntos(nuevoTotalPuntos);
-              // if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
               
               // Actualizar currentLevel al avanzar
               if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
@@ -1812,18 +1813,18 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
             saveTotal(spent);
             
+            // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos después (en nextLevel)
+            timeRemainingRef.current = timeFor(level) - time;
+            console.log(`✅ [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+            
             // Al GANAR: guardar progreso en API (próximo nivel desbloqueado)
             try {
               if (window.LUM_API) {
                 const isPracticeMode = practiceModeLevel !== null;
                 const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-                const puntos = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
                 
                 if (!isPracticeMode && !isRetry) {
                   // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
-                  // const nuevoTotalPuntos = totalPuntos + puntos;
-                  // setTotalPuntos(nuevoTotalPuntos);
-                  // if (typeof onPuntosUpdate === 'function') onPuntosUpdate(nuevoTotalPuntos);
                   
                   // Actualizar currentLevel al avanzar
                   if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
@@ -1863,8 +1864,10 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
     // 🔥 CALCULAR Y ACTUALIZAR PUNTOS del nivel recién ganado
     const isPracticeMode = practiceModeLevel !== null;
     const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-    const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeFor(level) - time);
+    const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeRemainingRef.current);
     const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+    
+    console.log(`📊 [NEXT] Calculando puntos - isPractice: ${isPracticeMode}, isRetry: ${isRetry}, timeRemaining: ${timeRemainingRef.current}s, puntosDelNivel: ${puntosDelNivel}, totalPuntos: ${totalPuntos}, nuevoTotal: ${nuevoTotalPuntos}`);
     
     // Actualizar puntos en pantalla (SIEMPRE, para que se vea en el header)
     setTotalPuntos(nuevoTotalPuntos);
@@ -2119,7 +2122,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               <div style={{fontSize:32, marginBottom:8, textShadow:'0 0 10px var(--neon2), 0 0 20px var(--neon2)'}}>✨</div>
               <h3 style={{color:'var(--neon2)', marginBottom:8}}>¡Nivel superado!</h3>
               <div style={{fontSize:16, color:'#ffffff88', marginBottom:16}}>
-                Puntos: {calculatePuntos(level, timeFor(level) - time)} pts
+                Puntos: {calculatePuntos(level, timeRemainingRef.current)} pts
               </div>
               <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
                 <button className="btn" onClick={()=>{setWin(false); start();}} style={{border:'2px solid #ff6b6b', color:'#ff6b6b', boxShadow:'0 0 10px #ff6b6b44'}}>
