@@ -37,6 +37,9 @@
             const root = document.getElementById('gameRoot');
             if (root && typeof window.LumetrixGame !== 'undefined') {
                 window.LumetrixGame.mount(root);
+            } else {
+                // DEBUG: Si el game bundle no se cargó
+                root.innerHTML = '<h1 style="color:red;padding:20px;">ERROR: game.bundle.js no cargado</h1>';
             }
         });
     </script>

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__.'/_common.php';
-require_once __DIR__.'/enviar_email.php';
+require_once __DIR__.'/enviar_email_smtp_mejorado.php'; // ⚡ Versión SMTP mejorada (puerto 25 sin TLS)
 $act = $_GET['action'] ?? '';
 
 if ($act === 'register') {
@@ -58,31 +58,49 @@ if ($act === 'login') {
   $pass = $in['password'] ?? '';
   if (!$user || !$pass) json_out(['success'=>false,'message'=>'faltan campos']);
 
+  error_log("🔑 [LOGIN] Intentando login para: $user");
   $pdo = db();
 
+  // Buscar usuario SIN filtrar por activo (para poder detectar cuentas no verificadas)
   if (strpos($user, '@') !== false) {
     $uakey = uakey_from_email($user, 'lumetrix');
-    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND activo=1 LIMIT 1');
+    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro, verified_at, activo FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
     $st->execute([$uakey, 'lumetrix']);
   } else {
-    $st = $pdo->prepare('SELECT usuario_aplicacion_key AS uakey, nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE nick=? AND app_codigo=? AND activo=1 LIMIT 1');
+    $st = $pdo->prepare('SELECT usuario_aplicacion_key AS uakey, nick, email, password_hash, fecha_registro, verified_at, activo FROM usuarios_aplicaciones WHERE nick=? AND app_codigo=? LIMIT 1');
     $st->execute([$user, 'lumetrix']);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (!$row) json_out(['success'=>false,'message'=>'usuario no encontrado']);
     $uakey = (string)$row['uakey'];
-    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
+    $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro, verified_at, activo FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
     $st->execute([$uakey, 'lumetrix']);
   }
 
   $row = $st->fetch(PDO::FETCH_ASSOC);
-  if (!$row || !password_verify($pass, $row['password_hash'])) json_out(['success'=>false,'message'=>'credenciales inválidas']);
+  if (!$row || !password_verify($pass, $row['password_hash'])) {
+    error_log("❌ [LOGIN] Credenciales inválidas para: $user");
+    json_out(['success'=>false,'message'=>'credenciales inválidas']);
+  }
 
-  // Verificar que el email esté verificado
-  $verif = $pdo->prepare('SELECT verified_at FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=?');
-  $verif->execute([$uakey]);
-  $verif_row = $verif->fetch(PDO::FETCH_ASSOC);
-  if ($verif_row && $verif_row['verified_at'] === NULL) {
+  error_log("🔍 [LOGIN] Usuario encontrado: " . json_encode($row));
+
+  // Verificar que el email esté verificado ANTES de permitir login
+  if ($row['verified_at'] === NULL) {
+    error_log("❌ [LOGIN] Email no verificado para: $user");
     json_out(['success'=>false,'message'=>'Debes verificar tu email antes de iniciar sesión','requires_verification'=>true,'email'=>$row['email']]);
+  }
+
+  // Verificar que la cuenta esté activa
+  if ($row['activo'] != 1) {
+    // ⭐ MEJORADO: Si no está activo pero está verificado, activarlo
+    if ($row['verified_at'] !== NULL) {
+      error_log("🔧 AUTO-FIX: Activando cuenta verificada para $uakey");
+      $fix = $pdo->prepare('UPDATE usuarios_aplicaciones SET activo=1 WHERE usuario_aplicacion_key=?');
+      $fix->execute([$uakey]);
+      $row['activo'] = 1; // Actualizar el array local
+    } else {
+      json_out(['success'=>false,'message'=>'Tu cuenta está desactivada. Contacta al administrador.']);
+    }
   }
 
   $_SESSION['uakey'] = $uakey;
@@ -93,6 +111,7 @@ if ($act === 'login') {
   $pr->execute([$uakey]);
   $progreso = $pr->fetch(PDO::FETCH_ASSOC) ?: ['nivel_actual'=>1,'total_time_s'=>0,'total_puntos'=>0];
 
+  error_log("✅ [LOGIN] Login exitoso para: $user (uakey: $uakey)");
   json_out(['success'=>true,'user'=>['key'=>$uakey,'nick'=>$row['nick'],'email'=>$row['email'],'fecha_registro'=>$row['fecha_registro']], 'progreso'=>$progreso]);
 }
 
@@ -134,10 +153,20 @@ if ($act === 'verify_code') {
   if (!codigoEsValido($usuario['verification_expiry'])) json_out(['success'=>false,'error'=>'El código ha expirado. Solicita uno nuevo.']);
   
   // Activar cuenta
-  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET verified_at=NOW(), activo=1, verification_code=NULL WHERE usuario_aplicacion_key=?');
+  $upd = $pdo->prepare('UPDATE usuarios_aplicaciones SET verified_at=NOW(), activo=1, verification_code=NULL, verification_expiry=NULL WHERE usuario_aplicacion_key=?');
   $upd->execute([$uakey]);
   
-  json_out(['success'=>true,'message'=>'¡Cuenta verificada correctamente!','verified'=>true,'user_key'=>$uakey]);
+  // ⭐ CRÍTICO: Verificar que la actualización se aplicó correctamente
+  $verify = $pdo->prepare('SELECT activo, verified_at FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=?');
+  $verify->execute([$uakey, 'lumetrix']);
+  $verification_result = $verify->fetch(PDO::FETCH_ASSOC);
+  
+  if (!$verification_result || $verification_result['activo'] != 1) {
+    error_log("❌ ERROR: La verificación no se aplicó correctamente para $uakey");
+    json_out(['success'=>false,'error'=>'Error interno al activar la cuenta']);
+  }
+  
+  json_out(['success'=>true,'message'=>'¡Cuenta verificada correctamente!','verified'=>true,'user_key'=>$uakey,'activo'=>$verification_result['activo']]);
 }
 
 if ($act === 'resend_code') {
@@ -172,6 +201,56 @@ if ($act === 'resend_code') {
   }
   
   json_out($response);
+}
+
+if ($act === 'request_delete') {
+  $in = json_decode(file_get_contents('php://input'), true) ?: [];
+  $email = trim($in['email'] ?? '');
+  $reason = trim($in['reason'] ?? '');
+  
+  if (!$email || !$reason) {
+    json_out(['success'=>false,'message'=>'Email y razón son obligatorios']);
+  }
+  
+  $pdo = db();
+  $uakey = uakey_from_email($email, 'lumetrix');
+  
+  // Verificar que el usuario existe
+  $st = $pdo->prepare('SELECT usuario_aplicacion_id, nombre, nick FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
+  $st->execute([$uakey, 'lumetrix']);
+  $user = $st->fetch(PDO::FETCH_ASSOC);
+  
+  if (!$user) {
+    json_out(['success'=>false,'message'=>'Usuario no encontrado']);
+  }
+  
+  // Guardar solicitud de eliminación
+  $now = date('Y-m-d H:i:s');
+  $ins = $pdo->prepare('INSERT INTO solicitudes_eliminacion 
+    (usuario_aplicacion_key, email, nombre, nick, razon, fecha_solicitud, estado) 
+    VALUES (?, ?, ?, ?, ?, ?, "pendiente")');
+  $ins->execute([$uakey, $email, $user['nombre'], $user['nick'], $reason, $now]);
+  
+  // Enviar email al administrador
+  $admin_email = 'info@intocables.com'; // ⭐ Email del administrador
+  $subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
+  $body = "
+    <h2>🗑️ Solicitud de eliminación de cuenta</h2>
+    <p><strong>Usuario:</strong> {$user['nombre']} ({$user['nick']})</p>
+    <p><strong>Email:</strong> {$email}</p>
+    <p><strong>Fecha:</strong> {$now}</p>
+    <p><strong>Razón:</strong></p>
+    <p style='background:#f5f5f5;padding:10px;border-radius:5px;'>{$reason}</p>
+    <p><strong>Acción requerida:</strong> Revisar y eliminar la cuenta si procede.</p>
+  ";
+  
+  $email_enviado = enviarEmail($admin_email, $subject, $body);
+  
+  json_out([
+    'success' => true,
+    'message' => 'Solicitud enviada correctamente. Te contactaremos pronto.',
+    'email_sent' => $email_enviado
+  ]);
 }
 
 if ($act === 'logout') {

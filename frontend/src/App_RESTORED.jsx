@@ -1,0 +1,2932 @@
+﻿import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+
+/**
+ * LUMETRIX ÔÇô React (build-safe, JS only)
+ *
+ * Esta versi├│n soluciona el error de build por variables no definidas
+ * y mantiene todo lo que ten├¡as funcional:
+ *  - Sonido robusto (no rompe si no hay AudioContext) y melod├¡a de victoria corta con 300ms de retraso
+ *  - Colores por nivel (las fichas aciertan pintando al color del borde)
+ *  - Al empezar un nivel NUNCA hay fichas del color del borde
+ *  - Pista inicial con retardo
+ *  - Tiempo acumulado por intento (derrota o victoria), con reset en Opciones
+ *  - Selector de nivel (debug) en Opciones
+ *  - Overlays: ganar Ô£¿ / perder ­ƒÆö con margen correcto
+ */
+
+// Detectar si estamos en Capacitor (APK) o web
+const isCapacitor = () => {
+  return window.Capacitor !== undefined || window.location.protocol === 'capacitor:';
+};
+
+// Funci├│n para obtener la ruta correcta de assets
+const getAssetPath = (path) => {
+  // Si estamos en Capacitor, quitar el prefijo 'lumetrix/'
+  if (isCapacitor() && path.startsWith('lumetrix/')) {
+    return path.replace('lumetrix/', '');
+  }
+  return path;
+};
+
+// ---------------- Utilidades de nivel ----------------
+const ACCENTS = [
+  "#39ff14", // lima
+  "#ff2fbf", // fucsia
+  "#00e5ff", // cian
+  "#ff6b6b", // coral
+  "#ffd93d", // amarillo
+  "#7c3aed", // violeta
+];
+const ACCENT_HUE = { "#39ff14":110, "#ff2fbf":320, "#00e5ff":190, "#ff6b6b":0, "#ffd93d":55, "#7c3aed":265 };
+function colorForLevel(level){ return ACCENTS[(level-1) % ACCENTS.length]; }
+// Funci├│n para obtener configuraci├│n de un nivel espec├¡fico
+function getLevelConfig(level) {
+  const world = Math.floor((level-1)/10) + 1;
+  const levelInWorld = ((level-1)%10) + 1;
+  const worldConfig = LEVEL_CONFIG.worlds[world-1];
+  
+  if (!worldConfig) {
+    // Fallback para niveles fuera de rango
+    return {
+      world: world,
+      levelInWorld: levelInWorld,
+      tiles: Math.min(4 + Math.floor(level/3), 10),
+      time: Math.max(35 - Math.floor(level/2), 12),
+      mechanics: ["touch"]
+    };
+  }
+  
+  return {
+    world: world,
+    levelInWorld: levelInWorld,
+    tiles: worldConfig.tiles[levelInWorld-1] || worldConfig.tiles[0],
+    time: worldConfig.time[levelInWorld-1] || worldConfig.time[0],
+    mechanics: worldConfig.mechanics[levelInWorld-1] || worldConfig.mechanics[0]
+  };
+}
+
+function tilesFor(level){
+  return getLevelConfig(level).tiles;
+}
+
+function timeFor(level){
+  return getLevelConfig(level).time;
+}
+
+function getWorldMechanics(world) {
+  const worldConfig = LEVEL_CONFIG.worlds[world-1];
+  if (!worldConfig) return { name: 'Desconocido', description: 'Mundo no definido' };
+  
+  const mechanics = worldConfig.mechanics;
+  if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
+    return { name: 'Combinado', description: 'Todas las mec├ínicas' };
+  } else if (mechanics.includes('double')) {
+    return { name: 'Doble toque', description: 'Fichas con doble toque' };
+  } else if (mechanics.includes('drag')) {
+    return { name: 'Arrastre', description: 'Arrastra las fichas correctas' };
+  } else {
+    return { name: 'Introducci├│n', description: 'Toques simples' };
+  }
+}
+
+// ---------------- Cat├ílogo de melod├¡as (hasta 15 notas) ----------------
+const MELODIES = [
+  // Escalas y motivos base
+  [262,294,330,349,392,440,494,523,494,440,392,349,330,294,262],
+  [523,494,440,392,349,330,294,262],
+  // Populares (fragmentos cortos 5ÔÇô15 notas)
+  [262,262,262,294,330,330,330,294,262,262,294,330,262], // La cucaracha (inicio)
+  [262,262,392,392,440,440,392,349,349,330,330,294,294,262], // Twinkle
+  [294,294,330,294,262,220,196,220,262], // Seven Nation Army
+  [392,440,494,440,392,392,440,494,440,392,330,349,392], // Bella Ciao
+  [392,392,440,392,349,330,330,349,392,349,330], // Shape of You
+  [330,349,392,330,349,392,349,330,294,262], // Despacito
+  [294,294,440,440,349,349,262,262], // Smells Like Teen Spirit
+  [392,392,392,330,392,392,392,330,294], // We Will Rock You
+  // A├▒adidas
+  [659,494,523,587,523,494,440,440,523,659,587,523,494], // Tetris A
+  [659,784,740,659,988,932,880,740,932,988], // Hedwig's Theme (inicio)
+  [392,392,392,311,466,392,311,466,392], // Imperial March
+  [330,330,349,392,392,349,330,294,262,262,294,330,330,294,294], // Ode to Joy
+  [392,392,440,392,523,494], // Happy Birthday (arranque)
+  [659,659,659,523,659,784,392,523], // Super Mario (arranque)
+  [440,587,659,587,659,587,523,659,587,440], // Zelda's Lullaby
+  [330,392,440,330,392,440,494,523,494,440,392,349], // Pirates (motivo)
+  [392,392,392,392,392,392,392,494,330,349,392], // Jingle Bells
+  [392,440,392,349,294,294,349,392,440,392,349,330], // Titanic (motivo)
+  // M├ís populares
+  [330,392,330,392,330,392,330,494,392,330,294], // F├╝r Elise (Beethoven)
+  [392,523,494,440,392,523,494,440,392,659,587,523], // Pink Panther
+  [349,392,440,392,349,294,330,349,330,294], // Can't Help Falling in Love
+  [440,440,523,494,440,392,349,392,440], // Eye of the Tiger
+  [659,587,523,440,523,587,659,523,440,392], // Mission Impossible
+  [294,330,294,262,294,330,349,392,349,330,294], // Somewhere Over the Rainbow
+  [392,440,494,523,587,523,494,440,392], // Don't Stop Believin'
+  [523,494,440,523,494,440,523,587,659], // Sweet Child O' Mine (intro)
+  [262,294,330,262,262,294,330,262,330,349,392], // Fr├¿re Jacques
+  [440,494,523,587,523,494,440,392,440], // The Entertainer (ragtime)
+];
+
+// ---------------- Configuraci├│n de Niveles ----------------
+const LEVEL_CONFIG = {
+  worlds: [
+    {
+      id: 1,
+      mechanics: [["touch"],["touch"],["touch"],["touch"],["touch"],["touch"],["touch"],["touch"],["touch"],["touch"]],
+      tiles: [4,4,5,5,6,6,7,7,8,8],
+      time: [35,32,30,28,26,24,22,20,18,16],
+      notes: "Mundo 1 ÔÇö introducci├│n y aprendizaje."
+    },
+    {
+      id: 2,
+      mechanics: [["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"]],
+      tiles: [4,4,5,5,6,6,7,8,8,9],
+      time: [32,30,28,26,24,22,20,18,17,16],
+      notes: "Mundo 2 ÔÇö introduce y domina arrastre."
+    },
+    {
+      id: 3,
+      mechanics: [["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"],["drag"]],
+      tiles: [5,5,6,6,7,7,8,8,9,9],
+      time: [30,28,26,24,22,20,20,20,20,20],
+      notes: "Mundo 3 ÔÇö m├ís fichas y menos tiempo."
+    },
+    {
+      id: 4,
+      mechanics: [["double"],["double"],["double"],["drag","double"],["drag"],["double"],["drag","double"],["drag","double"],["double"],["drag","double"]],
+      tiles: [5,5,6,6,7,7,8,8,9,9],
+      time: [28,26,24,22,20,20,20,19,18,20],
+      notes: "Mundo 4 ÔÇö introduce doble toque y combina mec├ínicas."
+    },
+    {
+      id: 5,
+      mechanics: [["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"],["touch","drag","double"]],
+      tiles: [6,7,8,8,9,9,9,9,9,9],
+      time: [24,22,20,20,20,20,19,18,18,20],
+      notes: "Mundo 5 ÔÇö dominio total de todas las mec├ínicas."
+    }
+  ]
+};
+
+// ---------------- Sonido (WebAudio) ----------------
+function useSFX(enabled, volume = 0.08, musicOn = true){
+  const ctxRef = useRef(null);
+  const bgAudioRef = useRef(null);
+  const startAudioRef = useRef(null);
+  const safeWindow = typeof window !== 'undefined' ? window : {};
+  const getCtx = ()=>{
+    if(!enabled) return null;
+    try{
+      if(!ctxRef.current){
+        const C = safeWindow.AudioContext || safeWindow.webkitAudioContext;
+        if(!C) return null; // sin soporte ÔåÆ silencio
+        ctxRef.current = new C();
+      }
+      return ctxRef.current;
+    }catch{ return null; }
+  };
+  const tone = (f=440,d=0.12,type='sine',gain=0.25)=>{
+    const ctx=getCtx(); if(!ctx) return; try{
+      // ­ƒöº FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
+      if(ctx.state === 'suspended') { 
+        ctx.resume().then(() => {
+          // Crear y reproducir despu├®s de reanudar
+          const o=ctx.createOscillator(); const g=ctx.createGain();
+          o.type=type; o.frequency.value=f; g.gain.value=gain * 8;
+          o.connect(g); g.connect(ctx.destination);
+          const t0=ctx.currentTime; o.start(t0); o.stop(t0+d);
+        }).catch(()=>{});
+        return; // Salir temprano, el resume har├í el trabajo
+      }
+      
+      const o=ctx.createOscillator(); const g=ctx.createGain();
+      o.type=type; o.frequency.value=f; g.gain.value=gain * 8; // x8 volumen para clicks de fichas m├ís fuerte
+      o.connect(g); g.connect(ctx.destination);
+      const t0=ctx.currentTime; o.start(t0); o.stop(t0+d);
+    }catch{}
+  };
+  const playMelody = (arr,dur=0.12,gap=0.04)=>{
+    const ctx=getCtx(); if(!ctx||!arr||!arr.length) return; try{
+      // ­ƒöº FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
+      if(ctx.state === 'suspended') { 
+        ctx.resume().then(() => {
+          // Crear y reproducir despu├®s de reanudar
+          arr.forEach((f,i)=>{
+            const o=ctx.createOscillator(); const g=ctx.createGain();
+            o.type='triangle'; o.frequency.value=f; g.gain.value=0.6;
+            o.connect(g); g.connect(ctx.destination);
+            const t=ctx.currentTime + i*(dur+gap);
+            o.start(t); o.stop(t+dur);
+          });
+        }).catch(()=>{});
+        return;
+      }
+      
+      arr.forEach((f,i)=>{
+        const o=ctx.createOscillator(); const g=ctx.createGain();
+        o.type='triangle'; o.frequency.value=f; g.gain.value=0.6; // x2 volumen para melod├¡as
+        o.connect(g); g.connect(ctx.destination);
+        const t=ctx.currentTime + i*(dur+gap);
+        o.start(t); o.stop(t+dur);
+      });
+    }catch{}
+  };
+  // Audio de fondo - FIX MEMOFLIP: Cargar completamente antes de reproducir
+  const initBgAudio = () => {
+    if (bgAudioRef.current) return;
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.loop = true;
+        audio.volume = volume;
+        
+        // Ô£à CR├ìTICO: Esperar a que el audio est├® completamente cargado
+        audio.addEventListener('canplaythrough', () => {
+          console.log('Ô£à [AUDIO] M├║sica de fondo cargada completamente (duraci├│n:', audio.duration + 's)');
+          bgAudioRef.current = audio;
+          resolve(audio);
+        }, { once: true });
+        
+        audio.addEventListener('error', (e) => {
+          console.error('ÔØî [AUDIO] Error cargando m├║sica de fondo:', e);
+          reject(e);
+        });
+        
+        // Listeners de debug
+        audio.addEventListener('ended', () => {
+          console.log('­ƒÄÁ [AUDIO] M├║sica terminada (no deber├¡a pasar si loop=true)');
+        });
+        
+        audio.addEventListener('pause', () => {
+          console.log('ÔÅ©´©Å [AUDIO] M├║sica pausada');
+        });
+        
+        audio.addEventListener('play', () => {
+          console.log('ÔûÂ´©Å [AUDIO] M├║sica reproduciendo');
+        });
+        
+        // Ô£à IMPORTANTE: Aplicar ruta correcta para APK
+        audio.src = getAssetPath('lumetrix/audio/audiofondo.mp3');
+        
+        // Ô£à CR├ìTICO: Forzar la carga del archivo
+        audio.load();
+      } catch (e) {
+        console.error('Error inicializando audio:', e);
+        reject(e);
+      }
+    });
+  };
+
+  const startBgMusic = async (musicEnabled = true) => {
+    if (!musicEnabled) return;
+    
+    try {
+      // Si no est├í inicializado, inicializar primero
+      if (!bgAudioRef.current) {
+        await initBgAudio();
+      }
+      
+      if (bgAudioRef.current) {
+        // Ô£à Reproducir despu├®s de que est├® completamente cargado
+        await bgAudioRef.current.play();
+        console.log('­ƒÄÁ [AUDIO] M├║sica de fondo iniciada correctamente');
+      }
+    } catch (e) {
+      console.error('Error iniciando m├║sica:', e);
+    }
+  };
+
+  const stopBgMusic = () => {
+    if (!bgAudioRef.current) return;
+    try {
+      bgAudioRef.current.pause();
+      bgAudioRef.current.currentTime = 0;
+    } catch (e) {
+      console.error('Error parando m├║sica:', e);
+    }
+  };
+
+  const updateBgVolume = (newVolume) => {
+    if (bgAudioRef.current) {
+      bgAudioRef.current.volume = newVolume;
+    }
+  };
+
+  // Audio de inicio (jugar.mp3)
+  const initStartAudio = () => {
+    if (startAudioRef.current) return;
+    try {
+      const audio = new Audio(getAssetPath('lumetrix/audio/jugar.mp3'));
+      audio.volume = 0.7; // Volumen medio para el sonido de inicio
+      startAudioRef.current = audio;
+    } catch (e) {
+      console.log('Error cargando audio de inicio:', e);
+    }
+  };
+
+  const playStartSound = () => {
+    if (!enabled || !startAudioRef.current) return;
+    try {
+      startAudioRef.current.currentTime = 0;
+      startAudioRef.current.play().catch(e => {
+        console.log('Error reproduciendo audio de inicio:', e);
+      });
+    } catch (e) {}
+  };
+
+  // Control de visibilidad: pausar m├║sica cuando la app va a segundo plano
+  // ÔÜá´©Å TEMPORALMENTE DESACTIVADO - Causaba que el audio se cortara constantemente
+  /*
+  useEffect(() => {
+    // Capacitor: appStateChange (solo para m├│viles)
+    let appStateListener;
+    const setupCapacitorListener = async () => {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+        const { App } = window.Capacitor.Plugins;
+        appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
+          if (bgAudioRef.current && bgAudioRef.current.src) {
+            if (!isActive) {
+              // App en segundo plano ÔåÆ pausar INTENCIONALMENTE
+              bgAudioRef.current.dataset.intentionalPause = 'true';
+              bgAudioRef.current.pause();
+              console.log('­ƒöç [APP] M├║sica pausada (app en segundo plano)');
+            } else if (musicOn && bgAudioRef.current.paused) {
+              // App vuelve al primer plano ÔåÆ reanudar
+              bgAudioRef.current.play().catch(e => console.log('ÔØî [APP] Error reanudando m├║sica:', e));
+              console.log('­ƒöè [APP] M├║sica reanudada (app activa)');
+            }
+          }
+        });
+      }
+    };
+    setupCapacitorListener();
+
+    return () => {
+      if (appStateListener && appStateListener.remove) {
+        appStateListener.remove();
+      }
+    };
+  }, [musicOn]);
+  */
+
+  return {
+    start: ()=>{ 
+      // Usar archivo jugar.mp3 en lugar de acorde sint├®tico
+      playStartSound();
+    },
+    ok:    (f)=>tone(f||880,0.1,'triangle',0.07),
+    fail:  ()=>tone(260,0.12,'sine',0.045), // suave "meck"
+    blink: (f)=>tone(f||720,0.12,'sine',0.08),
+    // Victoria: siempre trozo corto (5ÔÇô6 notas) + retraso 300ms
+    winMelody: (arr)=>{ const short=(arr&&arr.length?arr.slice(0,6):[659.25,880.0,1046.5]); setTimeout(()=>playMelody(short,0.12,0.04), 300); },
+    // Audio de fondo
+    initBg: initBgAudio,
+    startBg: startBgMusic,
+    stopBg: stopBgMusic,
+    updateVolume: updateBgVolume,
+    // Audio de inicio
+    initStart: initStartAudio,
+  };
+}
+function vibrate(ms, enabled){ try{ if(enabled && navigator.vibrate) navigator.vibrate(ms); }catch{} }
+
+// ---------------- CSS (inyecci├│n) ----------------
+function useLumetrixStyles(){
+  useEffect(()=>{
+    const id='lumetrix-css'; if(document.getElementById(id)) return;
+    const tag=document.createElement('style'); tag.id=id; tag.textContent=`
+      @import url('https://fonts.googleapis.com/css2?family=Tektur:wght@400;500;600;700;800;900&display=swap');
+      :root{ --bg:#000; --fg:#e5e7eb; --muted:#9ca3af; --neon1:#ff2fbf; --neon2:#00e5ff; --accent:#39ff14; }
+      *{box-sizing:border-box}
+      html,body,#root{height:100%}
+      body{margin:0;background:#000;color:#fff;font-family:'Tektur', sans-serif}
+      .shell{min-height:100svh;display:flex;align-items:stretch;justify-content:center}
+      .device{width:min(390px,100vw);height:100svh;background:#000;position:relative;overflow:hidden}
+      @media (min-width:768px){.shell{padding:24px}.device{height:844px;border-radius:24px;border:1px solid #ffffff1a;box-shadow:0 0 0 8px #ffffff08}}
+      .screen{position:absolute;inset:0}
+      /* Intro */
+      .introWrap{position:relative;height:100%;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box}
+      .introBg{position:absolute;inset:12px}
+      .introBg i{position:absolute;border-radius:10px;opacity:.6;filter:blur(.5px)}
+      .panel{position:relative;z-index:2;width:100%;max-width:300px;border-radius:16px;padding:40px 24px;background:#11111135;border:3px solid #00e5ff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 0 22px rgba(0,0,0,.55);margin:30px 20px 0;display:flex;flex-direction:column;justify-content:flex-start}
+      .logo{font-weight:900;text-align:center;margin:0 0 8px;letter-spacing:.18em;line-height:1;display:flex;justify-content:center;align-items:center}
+      .logo span{display:inline-block;background:linear-gradient(90deg,var(--neon1),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 8px #ff2fbf59,0 0 12px #00e5ff47}
+      .actions{display:flex;gap:8px;justify-content:center}
+      .btn{appearance:none;border-radius:12px;border:1px solid #ffffff44;background:transparent;color:#fff;font-weight:700;padding:12px 18px;cursor:pointer;font-size:16px}
+      .btn-start{appearance:none;border-radius:16px;border:2px solid #39ff14;background:rgba(57,255,20,0.1);color:#39ff14;font-weight:900;padding:20px 32px;cursor:pointer;font-size:20px;box-shadow:0 0 20px rgba(57,255,20,0.3);transition:all 0.3s ease}
+      .btn-start:hover{background:rgba(57,255,20,0.2);box-shadow:0 0 30px rgba(57,255,20,0.5);transform:scale(1.05)}
+      .btn1{border-color:#f0abfc99;color:#f0abfc}.btn1:hover{background:#ff2fbf22}
+      .btn2{border-color:#7dd3fc99;color:#7dd3fc}.btn2:hover{background:#00e5ff22}
+      .copy{position:absolute;left:0;right:0;bottom:24px;text-align:center;color:#ffffffb3;font-size:10px;z-index:3}
+      /* HUD / Board */
+      .topbar{display:flex;align-items:center;justify-content:space-between;padding:38px 10px 8px}
+      .brand{font-size:18px;font-weight:800;background:linear-gradient(90deg,var(--neon1),var(--neon2));-webkit-background-clip:text;background-clip:text;color:transparent}
+      .icons{display:flex;gap:12px}
+      .icon{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;color:#fff;border:none;background:transparent;cursor:pointer}
+      .hud{display:flex;align-items:center;gap:8px;padding:0 10px}
+      .meta{display:flex;align-items:center;gap:6px;margin-left:4px;font-size:11px;opacity:.9}
+      .chip{border:1px solid #ffffff33;border-radius:999px;padding:4px 12px;background:#ffffff10;box-shadow:0 0 4px #ffffff16}
+      .meta .chip b{font-weight:700;margin-right:4px}
+      .timebar{flex:1;height:12px;border-radius:999px;border:1px solid var(--accent);box-shadow:0 0 6px #ffffff22, 0 0 12px var(--accent)}
+      .timefill{display:block;height:8px;margin:2px;border-radius:999px;background:linear-gradient(90deg,var(--accent),#fff);box-shadow:0 0 8px var(--accent);width:100%}
+      .board{position:relative;margin:10px 10px 5px 10px;border-radius:16px;border:2px solid var(--accent);box-shadow:0 0 12px var(--accent);height:calc(100% - 135px);overflow:hidden;animation:pulseGlow 2s ease-in-out infinite}
+      @keyframes pulseGlow{0%,100%{box-shadow:0 0 12px var(--accent)}50%{box-shadow:0 0 14px var(--accent),0 0 18px var(--accent)}}
+      .tile{position:absolute;border-radius:12px;border:1px solid #ffffff2f;z-index:1;touch-action:manipulation;transition:filter .12s ease, transform .2s ease-out, box-shadow .2s ease-out;cursor:pointer}
+      .tile:active{transform:scale(1.05);box-shadow:0 0 15px currentColor, 0 0 25px currentColor}
+      .tile.dragging{transform:scale(1.1);z-index:100;box-shadow:0 0 20px rgba(255,255,255,0.5);cursor:grabbing}
+      .drop-zone{border:3px solid #ffffff66;border-radius:12px;background:transparent;pointer-events:none;z-index:100}
+      .drop-zone.drag-over{border-style:solid;transform:scale(1.1);box-shadow:0 0 25px currentColor}
+      .lit{box-shadow:0 0 10px var(--accent), 0 0 18px var(--accent); filter:brightness(1.18)}
+      .overlay{position:absolute;inset:0;display:grid;place-items:center;z-index:2}
+      .modal{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+      .card{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:20px;min-height:auto;max-height:80vh;overflow-y:auto}
+      .card h3{margin-top:0;margin-bottom:16px;padding-top:4px}
+      .card-compact{position:relative;width:280px;max-width:85vw;background:#000;border:1px solid #ffffff1f;border-radius:14px;box-shadow:0 0 12px #ff2fbf55;color:#fff;padding:24px;min-height:200px;max-height:240px}
+      .closer{position:absolute;right:8px;top:8px;width:28px;height:28px;border-radius:999px;background:#000b;border:1px solid #ffffff33;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;font-size:14px;line-height:1}
+      .list{display:flex;flex-direction:column;gap:8px}
+      .bokeh{pointer-events:none}
+      .bokeh i{position:absolute;border-radius:999px;filter:blur(24px)}
+      .b1{left:-10%;top:10%;width:220px;height:220px;background:var(--neon1);opacity:.16;animation:blob1 14s linear infinite}
+      .b2{left:60%;top:-8%;width:280px;height:280px;background:var(--neon2);opacity:.14;animation:blob2 18s linear infinite}
+      .b3{left:20%;bottom:-12%;width:260px;height:260px;background:#7c3aed;opacity:.12;animation:blob3 20s linear infinite}
+      @keyframes blob1{0%{transform:translate(0,0)}50%{transform:translate(40px,10px)}100%{transform:translate(0,0)} }
+      @keyframes blob2{0%{transform:translate(0,0)}50%{transform:translate(-30px,30px)}100%{transform:translate(0,0)} }
+      @keyframes blob3{0%{transform:translate(0,0)}50%{transform:translate(20px,-30px)}100%{transform:translate(0,0)} }
+      /* L├¡neas de ne├│n en bordes */
+      .neon-borders{position:absolute;inset:12px;pointer-events:none;z-index:5;border-radius:16px;overflow:hidden}
+      .neon-line{position:absolute;box-shadow:0 0 10px currentColor, 0 0 20px currentColor;animation:neonFlow 4s linear infinite}
+      .neon-line.top{top:0;left:0;right:0;height:3px;background:#ff2fbf;color:#ff2fbf;animation-delay:0s;border-radius:0 0 3px 3px}
+      .neon-line.right{right:0;top:0;bottom:0;width:3px;background:#00e5ff;color:#00e5ff;animation-delay:1s;border-radius:3px 0 0 3px}
+      .neon-line.bottom{bottom:0;left:0;right:0;height:3px;background:#39ff14;color:#39ff14;animation-delay:2s;border-radius:3px 3px 0 0}
+      .neon-line.left{left:0;top:0;bottom:0;width:3px;background:#ff6b6b;color:#ff6b6b;animation-delay:3s;border-radius:0 3px 3px 0}
+      @keyframes neonFlow{0%{opacity:0;transform:scaleX(0)}25%{opacity:1;transform:scaleX(1)}75%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(0)} }
+      @keyframes logoGlow{0%{filter:drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)}50%{filter:drop-shadow(0 0 30px #ff00ff) drop-shadow(0 0 50px #39ff14) drop-shadow(0 0 80px #00ffff)}100%{filter:drop-shadow(0 0 25px #00ffff) drop-shadow(0 0 45px #ff00ff) drop-shadow(0 0 70px #39ff14)} }
+      
+      /* ---- Drag Nudge / Hints ---- */
+      @keyframes nudgeShake {
+        0% { transform: translate(0,0) rotate(0deg) }
+        20% { transform: translate(2px, -1px) rotate(-1.2deg) }
+        40% { transform: translate(-2px, 1px) rotate(1.2deg) }
+        60% { transform: translate(2px, 0px) rotate(-0.8deg) }
+        80% { transform: translate(-1px, 1px) rotate(0.8deg) }
+        100% { transform: translate(0,0) rotate(0deg) }
+      }
+      .tile.nudge-shake {
+        animation: nudgeShake .45s ease both;
+        filter: brightness(1.12);
+      }
+
+      @keyframes pulseRing {
+        0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.35), 0 0 18px currentColor; }
+        70%  { box-shadow: 0 0 0 10px rgba(255,255,255,0),   0 0 18px currentColor; }
+        100% { box-shadow: 0 0 0 0 rgba(255,255,255,0),      0 0 18px currentColor; }
+      }
+      .drop-zone.pulse {
+        animation: pulseRing .9s ease-out 1;
+      }
+
+      .drag-hint {
+        position: absolute;
+        pointer-events: none;
+        z-index: 1000;
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #000;
+        background: #00fff0;
+        box-shadow: 0 0 12px #00fff077;
+        transform: translate(-50%, -140%);
+        opacity: 0;
+        transition: opacity .12s ease, transform .25s ease;
+      }
+      .drag-hint.show {
+        opacity: 1;
+        transform: translate(-50%, -160%);
+      }
+      .drag-hint::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -6px;
+        width: 0; height: 0;
+        transform: translateX(-50%);
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 6px solid #00fff0;
+      }
+    `;
+    document.head.appendChild(tag);
+    return ()=>{ try{ document.head.removeChild(tag); }catch{} };
+  },[]);
+}
+
+// ---------------- Intro ----------------
+function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTotalPuntos }){
+  const bgRef = useRef(null); const logoRef = useRef(null);
+  const [userInfo, setUserInfo] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  
+  // ­ƒöÉ VERIFICAR SESI├ôN AL CARGAR (igual que MemoFlip)
+  const hasCheckedRef = useRef(false);
+  
+  useEffect(() => {
+    // Evitar m├║ltiples llamadas
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
+    
+    checkSession();
+  }, []);
+  
+  const checkSession = async () => {
+    try {
+      console.log('­ƒöì [INTRO] Verificando sesi├│n...');
+      const data = await window.LUM_API.api('auth.php?action=check_session');
+      
+      if (data && data.success) {
+        console.log('Ô£à [INTRO] Sesi├│n activa:', data.user?.nick);
+        setUserInfo(data.user);
+        
+        // Ô£à FIX: Guardar sesi├│n en window.currentUser para que sincronizaci├│n funcione
+        window.currentUser = data.user;
+        
+        // Ô£à APLICAR PROGRESO DEL SERVIDOR
+        if (data.progreso) {
+          console.log('­ƒôè [INTRO] Aplicando progreso del servidor:', data.progreso);
+          setLevel(data.progreso.nivel_actual || 1);
+          setCurrentLevel(data.progreso.nivel_actual || 1);
+          setTotalTime(data.progreso.total_time_s || 0);
+          setTotalPuntos(data.progreso.total_puntos || 0);
+        }
+        
+        setAuthChecking(false);
+      } else {
+        console.log('­ƒæñ [INTRO] Sin sesi├│n, intentando auto-login...');
+        
+        // ÔØî No hay sesi├│n ÔåÆ Intentar AUTO-LOGIN con credenciales guardadas
+        const savedEmail = localStorage.getItem('lum_user_email');
+        const savedToken = localStorage.getItem('lum_user_token');
+        
+        if (savedEmail && savedToken) {
+          console.log('­ƒöæ [INTRO] Credenciales encontradas, auto-login...');
+          try {
+            const savedPassword = atob(savedToken);
+            const loginResult = await window.LUM_API.api('auth.php?action=login', {
+              method: 'POST',
+              body: JSON.stringify({ username: savedEmail, password: savedPassword })
+            });
+            
+            if (loginResult && loginResult.success) {
+              console.log('Ô£à [INTRO] Auto-login exitoso!');
+              setUserInfo(loginResult.user);
+              
+              // Ô£à FIX: Guardar sesi├│n en window.currentUser para que sincronizaci├│n funcione
+              window.currentUser = loginResult.user;
+              
+              // Ô£à APLICAR PROGRESO DEL SERVIDOR
+              if (loginResult.progreso) {
+                console.log('­ƒôè [INTRO] Aplicando progreso del servidor (auto-login):', loginResult.progreso);
+                setLevel(loginResult.progreso.nivel_actual || 1);
+                setCurrentLevel(loginResult.progreso.nivel_actual || 1);
+                setTotalTime(loginResult.progreso.total_time_s || 0);
+                setTotalPuntos(loginResult.progreso.total_puntos || 0);
+              }
+            } else {
+              console.log('ÔØî [INTRO] Auto-login fall├│, limpiando credenciales');
+              localStorage.removeItem('lum_user_email');
+              localStorage.removeItem('lum_user_token');
+            }
+          } catch (e) {
+            console.log('ÔØî [INTRO] Error en auto-login:', e);
+          }
+        } else {
+          console.log('­ƒöô [INTRO] No hay credenciales guardadas');
+        }
+        setAuthChecking(false);
+      }
+    } catch (error) {
+      console.error('ÔØî [INTRO] Error verificando sesi├│n:', error);
+      setAuthChecking(false);
+    }
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await window.LUM_API.api('auth.php?action=logout');
+      localStorage.removeItem('lum_user_email');
+      localStorage.removeItem('lum_user_token');
+      console.log('­ƒöô [INTRO] Sesi├│n cerrada');
+      window.location.reload();
+    } catch (e) {
+      console.log('ÔØî [INTRO] Error al cerrar sesi├│n');
+    }
+  };
+  
+  useEffect(()=>{ 
+    const bg=bgRef.current; if(!bg) return; 
+    const spawn=()=>{ 
+      const i=document.createElement('i'); 
+      // M├ís variedad de tama├▒os
+      const w=20+Math.random()*25, h=40+Math.random()*60; 
+      
+      // Distribuci├│n dentro del ├írea con margen (12px desde los bordes)
+      // El ├írea de figuras es 100% - 24px (12px de margen en cada lado)
+      let x, y;
+      const centerAvoid = Math.random() < 0.7; // 70% evitan el centro
+      if (centerAvoid) {
+        // Zonas perif├®ricas: bordes y esquinas (dentro del ├írea con margen)
+        const zones = [
+          {x: [0, 15], y: [0, 100]}, // Lado izquierdo
+          {x: [85, 100], y: [0, 100]}, // Lado derecho  
+          {x: [0, 100], y: [0, 15]}, // Parte superior
+          {x: [0, 100], y: [85, 100]}, // Parte inferior
+        ];
+        const zone = zones[Math.floor(Math.random() * zones.length)];
+        x = zone.x[0] + Math.random() * (zone.x[1] - zone.x[0]);
+        y = zone.y[0] + Math.random() * (zone.y[1] - zone.y[0]);
+      } else {
+        // 30% pueden aparecer en el centro (pero dentro del ├írea con margen)
+        x = Math.random()*100;
+        y = Math.random()*100;
+      }
+      
+      i.style.left=x+'%'; 
+      i.style.top=y+'%'; 
+      i.style.width=w+'px'; 
+      i.style.height=h+'px'; 
+      
+      // Colores m├ís vibrantes y variados
+      const hues = [0, 60, 120, 180, 240, 300, 45, 135, 225, 315]; // M├ís colores ne├│n
+      const hue = hues[Math.floor(Math.random() * hues.length)];
+      i.style.background=`hsl(${hue} 95% 65% / .9)`; 
+      bg.appendChild(i); 
+      setTimeout(()=>i.remove(), 3000); // M├ís tiempo visible
+    }; 
+    const t=setInterval(spawn, 80); // M├ís frecuente (antes 120ms)
+    return ()=>clearInterval(t); 
+  },[]);
+  useEffect(()=>{ const fit=()=>{ const el=logoRef.current; if(!el) return; const panel=el.parentElement?.parentElement; if(!panel) return; el.style.fontSize=''; let size=Math.min(42, Math.max(28, Math.floor(panel.clientWidth*0.16))); el.style.fontSize=size+'px'; el.style.letterSpacing='0.16em'; let loops=0; while(el.scrollWidth>panel.clientWidth-24 && loops<20){ size-=1; el.style.fontSize=size+'px'; loops++; } }; fit(); const ro=new ResizeObserver(fit); ro.observe(document.body); return ()=>ro.disconnect(); },[]);
+  return (
+    <section className="screen intro">
+      <div className="introWrap">
+        <div className="introBg" ref={bgRef} />
+        <div className="neon-borders">
+          <div className="neon-line top"></div>
+          <div className="neon-line right"></div>
+          <div className="neon-line bottom"></div>
+          <div className="neon-line left"></div>
+        </div>
+        <div className="panel">
+          <h1 className="logo">
+            <img src={getAssetPath("lumetrix/img/logo.png")} alt="LUMETRIX" style={{
+              height:'150px',
+              width:'500px',
+              filter:'drop-shadow(0 0 20px #39ff14) drop-shadow(0 0 40px #00ffff) drop-shadow(0 0 60px #ff00ff)',
+              animation:'logoGlow 2s ease-in-out infinite alternate'
+            }} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='block';}} />
+            <div style={{display:'none',fontSize:'48px',fontWeight:'900',letterSpacing:'0.1em',background:'linear-gradient(90deg,#39ff14,#00ffff,#ff00ff)',WebkitBackgroundClip:'text',backgroundClip:'text',color:'transparent',textShadow:'0 0 20px #39ff14,0 0 40px #00ffff,0 0 60px #ff00ff'}}>LUMETRIX</div>
+          </h1>
+          <div style={{textAlign:'center',fontSize:18,opacity:.9,marginTop:20,marginBottom:8,lineHeight:'1.4',fontWeight:500}}>Esto no es un Sim├│n: es el <b>antiÔÇæSim├│n</b>.<br/><br/><b>Encuentra</b> la secuencia y pinta <b>todas</b> las piezas del color del borde.</div>
+          
+          {authChecking ? (
+            // Verificando autenticaci├│n - mostrar spinner
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div style={{fontSize:14,opacity:0.7,color:'#39ff14'}}>Verificando sesi├│n...</div>
+            </div>
+          ) : userInfo ? (
+            // Usuario logueado - mostrar progreso guardado
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div style={{fontSize:18,opacity:0.9,color:'#39ff14',fontWeight:700,marginBottom:16}}>┬íHola, {userInfo.nick || 'Usuario'}!</div>
+              <div className="actions" style={{marginBottom:8}}>
+                <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
+              </div>
+              <button 
+                className="btn btn2" 
+                onClick={handleLogout} 
+                style={{fontSize:11,padding:'6px 12px',opacity:0.7}}
+              >
+                Salir
+              </button>
+            </div>
+          ) : (
+            // Usuario NO logueado - opci├│n invitado o entrar
+            <div style={{textAlign:'center',marginTop:20}}>
+              <div className="actions" style={{marginBottom:16}}>
+                <button className="btn btn1" onClick={onPlay}>JUGAR</button>
+              </div>
+              <div style={{fontSize:12,opacity:0.5,marginBottom:6}}>┬┐Ya tienes cuenta?</div>
+              <button 
+                className="btn btn2" 
+                onClick={onAuth}
+                style={{fontSize:12,padding:'6px 14px'}}
+              >
+                Entrar
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="copy" style={{fontSize:'14px',fontWeight:500}}>┬® @intocables13 ┬À Todos los derechos reservados</div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------- Game ----------------
+function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus, restartTrigger }){
+  const boardRef = useRef(null);
+  const [time, setTime] = useState(timeFor(level));
+  const [running, setRunning] = useState(false);
+  const [win, setWin] = useState(false);
+  const [lose, setLose] = useState(false);
+  const [gameComplete, setGameComplete] = useState(false);
+  const [totalTime, setTotalTime] = useState(()=>{ try{ return Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; }catch{return 0;} });
+  const [totalPuntos, setTotalPuntos] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialContent, setTutorialContent] = useState(null);
+  const levelWonRef = useRef(false); // Rastrea si ya ganamos este nivel
+  const timeRemainingRef = useRef(0); // Guardar tiempo restante al ganar
+  useEffect(()=>{ if(typeof totalProp === 'number') setTotalTime(totalProp); }, [totalProp]);
+  useEffect(()=>{ if(typeof puntosProp === 'number') setTotalPuntos(puntosProp); }, [puntosProp]);
+
+  // Funci├│n para obtener el tutorial seg├║n el nivel
+  const getTutorial = (lvl) => {
+    const tutorialKey = `lum_tutorial_${lvl}`;
+    const seen = localStorage.getItem(tutorialKey);
+    if (seen) return null;
+    
+    switch(lvl) {
+      case 1:
+        return {
+          title: "┬íBienvenido a Lumetrix!",
+          steps: [
+            "Memoriza la secuencia de colores que aparece",
+            "Toca las fichas en el mismo orden",
+            "Completa antes de que se acabe el tiempo"
+          ],
+          icon: "Ôÿà"
+        };
+      case 11:
+        return {
+          title: "Nueva mec├ínica: Arrastre",
+          steps: [
+            "Algunas fichas tienen un s├¡mbolo de arrastre Ôçä",
+            "Arrastra estas fichas a la zona marcada",
+            "Las fichas normales se tocan como siempre"
+          ],
+          icon: "Ôçä"
+        };
+      case 31:
+        return {
+          title: "Nueva mec├ínica: Doble Toque",
+          steps: [
+            "Algunas fichas tienen dos c├¡rculos Ôª┐",
+            "Toca estas fichas DOS veces seguidas",
+            "Las dem├ís fichas se tocan una sola vez"
+          ],
+          icon: "Ôª┐"
+        };
+      case 40:
+        return {
+          title: "Nivel Combo",
+          steps: [
+            "Este nivel combina TODAS las mec├ínicas",
+            "Arrastra Ôçä las fichas de arrastre",
+            "Toca doble Ôª┐ las fichas marcadas",
+            "┬íConc├®ntrate y buena suerte!"
+          ],
+          icon: "ÔÜí"
+        };
+      default:
+        return null;
+    }
+  };
+
+  // Funci├│n para calcular puntos
+  const calculatePuntos = (level, timeRemaining, isFirstAttempt = true, hasErrors = false) => {
+    // Puntos base por nivel
+    let basePuntos = 10;
+    if (level <= 10) basePuntos = 10;
+    else if (level <= 20) basePuntos = 15;
+    else if (level <= 30) basePuntos = 20;
+    else if (level <= 40) basePuntos = 25;
+    else basePuntos = 30;
+
+    // Bonus por velocidad
+    let speedBonus = 0;
+    if (timeRemaining <= 5) speedBonus = 0;
+    else if (timeRemaining <= 10) speedBonus = 5;
+    else if (timeRemaining <= 15) speedBonus = 10;
+    else speedBonus = 15;
+
+    // Bonus especial
+    let specialBonus = 0;
+    if (isFirstAttempt) specialBonus += 10;
+    if (!hasErrors) specialBonus += 5;
+
+    return basePuntos + speedBonus + specialBonus;
+  };
+
+  const SFX = useSFX(soundOn, musicVolume, musicOn);
+  const world = Math.floor((level-1)/10) + 1;
+  const levelInWorld = ((level-1)%10) + 1;
+  const accent = useMemo(()=> colorForLevel(level), [level]);
+
+  // Inicializar audios al cargar (SOLO UNA VEZ al montar)
+  const audioInitializedRef = useRef(false);
+  const bgAudioReadyRef = useRef(false);
+  
+  useEffect(() => {
+    if (audioInitializedRef.current) return;
+    audioInitializedRef.current = true;
+    
+    // Ô£à FIX: Esperar a que el audio de fondo est├® completamente cargado
+    const initAudios = async () => {
+      try {
+        await SFX.initBg(); // Esperar a que termine de cargar
+        bgAudioReadyRef.current = true;
+        console.log('­ƒÄÁ [INIT] Audio de fondo listo para reproducir');
+      } catch (e) {
+        console.error('ÔØî [INIT] Error inicializando audio de fondo:', e);
+      }
+      
+      try {
+        SFX.initStart(); // No es async, se puede llamar directamente
+      } catch (e) {
+        console.error('ÔØî [INIT] Error inicializando audio de inicio:', e);
+      }
+    };
+    
+    initAudios();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Ô£à Array vac├¡o = solo una vez al montar
+
+  // Controlar m├║sica de fondo cuando cambie el estado
+  const musicStartedRef = useRef(false);
+  
+  useEffect(() => {
+    if (musicOn && !musicStartedRef.current) {
+      musicStartedRef.current = true;
+      
+      // Ô£à FIX: Esperar a que el audio est├® listo antes de reproducir
+      const startMusic = async () => {
+        // Esperar hasta que bgAudioReadyRef sea true
+        let attempts = 0;
+        while (!bgAudioReadyRef.current && attempts < 20) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (bgAudioReadyRef.current) {
+          await SFX.startBg(true);
+        } else {
+          console.warn('ÔÜá´©Å [MUSIC] Timeout esperando audio de fondo');
+        }
+      };
+      
+      startMusic();
+    } else if (!musicOn && musicStartedRef.current) {
+      musicStartedRef.current = false;
+      SFX.stopBg();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicOn]); // Ô£à Solo cuando cambia musicOn (no SFX)
+
+  // Actualizar volumen cuando cambie
+  useEffect(() => {
+    SFX.updateVolume(musicVolume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicVolume]); // Ô£à Solo cuando cambia musicVolume (no SFX)
+
+  // Funci├│n para actualizar zonas de drop
+  const updateDropZones = () => {
+    const currentWorld = Math.floor((level-1)/10) + 1;
+    const config = getLevelConfig(level);
+    if ((currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && running && seqRef.current.length > 0) {
+      const zones = createDropZones(seqRef.current, level, dragTileId);
+      setDropZones(zones);
+    }
+  };
+
+  // Funci├│n para resetear paso actual (sin resetear todo el nivel)
+  const resetCurrentStep = () => {
+    SFX.fail();
+    vibrate(80, vibrateOn);
+    stepRef.current = 0;
+    
+    // si hay especial, aseg├║rate de devolverla a origen SIEMPRE
+    restoreSpecialTile('resetCurrentStep');
+    
+    resetTiles();
+    partiallyTouchedRef.current.clear(); // Reset fichas de doble toque
+    setPartiallyTouched(new Set());
+    const currentWorld = Math.floor((level-1)/10) + 1;
+    if (currentWorld >= 2 && seqRef.current.length > 0) {
+      updateDropZones();
+    }
+  };
+
+  // Funci├│n para configurar mec├ínicas del nivel
+  const setupLevelMechanics = (levelNum) => {
+    const config = getLevelConfig(levelNum);
+    const mechanics = config.mechanics;
+    const currentWorld = Math.floor((levelNum-1)/10) + 1;
+    
+    // SIMPLE: Si tiene drag Y double = COMBO
+    if (mechanics.includes('drag') && mechanics.includes('double')) {
+      // Mundo 4-5: Mec├ínica combo - SIEMPRE 1 de cada tipo especial
+      const totalTiles = config.tiles;
+      const dragCount = 1;    // SIEMPRE 1 ficha de arrastre
+      const doubleCount = 1;  // SIEMPRE 1 ficha de doble toque
+      const touchCount = totalTiles - dragCount - doubleCount; // Resto toque normal
+      
+      // Ô£à FIX: NUNCA la primera ficha (├¡ndice 0) puede ser especial
+      // Crear sets para cada tipo, excluyendo el ├¡ndice 0
+      const allIndices = Array.from({length: totalTiles - 1}, (_, i) => i + 1); // ├ìndices 1, 2, 3...
+      const shuffled = [...allIndices].sort(() => Math.random() - 0.5);
+      
+      const dragTiles = new Set(shuffled.slice(0, dragCount));
+      const doubleTiles = new Set(shuffled.slice(dragCount, dragCount + doubleCount));
+      // La primera ficha (0) siempre ser├í toque normal
+      const touchTiles = new Set([0, ...shuffled.slice(dragCount + doubleCount)]);
+      
+      setComboDragTiles(dragTiles);
+      setComboDoubleTiles(doubleTiles);
+      setComboTouchTiles(touchTiles);
+      
+      // Para compatibilidad con doble toque
+      setDoubleTouchTiles(doubleTiles);
+      doubleTouchTilesRef.current = doubleTiles; // ┬íIMPORTANTE: Configurar la referencia persistente!
+      
+      // Para compatibilidad con arrastre - configurar la primera ficha de arrastre
+      if (dragTiles.size > 0) {
+        const firstDragTile = Array.from(dragTiles)[0];
+        setSpecialId(firstDragTile);
+        specialIdRef.current = firstDragTile;
+        setDragTileId(firstDragTile);
+      } else {
+        setSpecialId(null);
+        specialIdRef.current = null;
+        setDragTileId(null);
+      }
+      
+    } else if (mechanics.includes('double') && !(mechanics.includes('drag'))) {
+      // Mundo 4: Solo doble toque - empezar con 1 ficha
+      const numDoubleTiles = 1; // Siempre 1 ficha de doble toque para empezar
+      const doubleTiles = new Set();
+      
+      // Ô£à FIX: NUNCA la primera ficha (├¡ndice 0) puede ser especial
+      // Crear fichas de doble toque ├║nicas, excluyendo el ├¡ndice 0
+      while (doubleTiles.size < numDoubleTiles) {
+        const randomIndex = 1 + Math.floor(Math.random() * (config.tiles - 1)); // ├ìndices 1 a tiles-1
+        doubleTiles.add(randomIndex);
+      }
+      doubleTouchTilesRef.current = doubleTiles;
+      setDoubleTouchTiles(doubleTiles);
+      setComboDragTiles(new Set());
+      setComboDoubleTiles(new Set());
+      setComboTouchTiles(new Set());
+      setDragTileId(null); // No se usa en doble toque
+      setSpecialId(null); // Limpiar ficha especial
+      specialIdRef.current = null; // Limpiar referencia
+      
+    } else if (currentWorld >= 2 && mechanics.includes('drag')) {
+      // Mundo 2-3: Seleccionar aleatoriamente UNA ficha para arrastre (nunca la primera)
+      const totalTiles = config.tiles;
+      const availableTiles = Array.from({length: totalTiles - 1}, (_, i) => i + 1);
+      const randomIndex = Math.floor(Math.random() * availableTiles.length);
+      const specialTileId = availableTiles[randomIndex];
+      setSpecialId(specialTileId);
+      specialIdRef.current = specialTileId;
+      
+      doubleTouchTilesRef.current.clear();
+      setDoubleTouchTiles(new Set());
+      setComboDragTiles(new Set());
+      setComboDoubleTiles(new Set());
+      setComboTouchTiles(new Set());
+    } else {
+      // Mundo 1: Solo toque normal
+      doubleTouchTilesRef.current.clear();
+      setDoubleTouchTiles(new Set());
+      setComboDragTiles(new Set());
+      setComboDoubleTiles(new Set());
+      setComboTouchTiles(new Set());
+      setSpecialId(null);
+      specialIdRef.current = null;
+    }
+    
+    // Reset estado de doble toque
+    partiallyTouchedRef.current.clear();
+    setPartiallyTouched(new Set());
+  };
+  
+  // Estado para mec├ínica de arrastre
+  const [tiles, setTiles] = useState([]); // Fichas renderizadas con React
+  const [drop, setDrop] = useState(null); // Zona de drop para ficha especial
+  const [draggingId, setDraggingId] = useState(null); // ID de ficha siendo arrastrada
+  const [specialId, setSpecialId] = useState(null); // ID de la ficha especial (arrastrable)
+  
+  // Refs para drag
+  const draggingPointerIdRef = useRef(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const dragPosRef = useRef({ x: 0, y: 0 });
+  const specialIdRef = useRef(null);
+  const currentSpecialIdRef = specialIdRef; // Alias de compatibilidad
+  const originalPositionRef = useRef(null); // Para guardar posici├│n original de ficha especial
+  
+  // Estado para mec├ínica de doble toque
+  const [doubleTouchTiles, setDoubleTouchTiles] = useState(new Set()); // Fichas que requieren doble toque
+  const doubleTouchTilesRef = useRef(new Set()); // Referencia persistente para fichas de doble toque
+  const [partiallyTouched, setPartiallyTouched] = useState(new Set()); // Fichas con primer toque
+  const partiallyTouchedRef = useRef(new Set()); // Referencia persistente para fichas con primer toque
+  
+  // Estado para mec├ínica combo (Mundo 5)
+  const [comboDragTiles, setComboDragTiles] = useState(new Set()); // Fichas que se arrastran en combo
+  const [comboDoubleTiles, setComboDoubleTiles] = useState(new Set()); // Fichas doble toque en combo
+  const [comboTouchTiles, setComboTouchTiles] = useState(new Set()); // Fichas toque normal en combo
+  const [dragTileId, setDragTileId] = useState(null); // Ficha que requiere arrastre en Mundo 2+
+
+  const seqRef = useRef([]);
+  const stepRef = useRef(0);
+  // Posiciones originales por id ÔåÆ para poder volver tras fallos posteriores
+  const origPosRef = useRef(new Map());
+  const timerRef = useRef(null);
+  const runningRef = useRef(false);
+
+  // Umbral para distinguir entre tap y drag real
+  const DRAG_MIN_PX = 8;
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const suppressClickRef = useRef(false);
+
+  // Paso actual espera ARRASTRE (drag)? Ignora todos los clics; s├│lo vale arrastrar.
+  const isCurrentStepDrag = (expectedId) => {
+    const cfg = getLevelConfig(level) || { mechanics: [] };
+    const mechanics = cfg.mechanics || [];
+    const currentWorld = Math.floor((level-1)/10) + 1;
+
+    // Combo (mundo 5): la ficha esperada es de arrastre si est├í en comboDragTiles
+    const isCombo = mechanics.includes('combo') ||
+      (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'));
+    if (isCombo) return comboDragTiles.has(expectedId);
+
+    // Mundos 2-3 (drag simple): la ficha esperada es arrastre si expected === specialId
+    if (currentWorld >= 2 && mechanics.includes('drag')) {
+      return specialIdRef.current === expectedId;
+    }
+    return false;
+  };
+
+  // Peque├▒o "nudge" cuando tocan la especial sin arrastrar
+  const nudgeSpecialTile = (reason = 'tap') => {
+    const board = boardRef.current;
+    if (!board || specialIdRef.current == null) return;
+
+    const el = board.querySelector(`.tile[data-id="${specialIdRef.current}"]`);
+    if (!el) return;
+
+    // 1) Wiggle en la ficha
+    el.classList.remove('nudge-shake');
+    // reflow para reiniciar anim
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+    el.classList.add('nudge-shake');
+    setTimeout(() => el.classList.remove('nudge-shake'), 550);
+
+    // 2) Pulso en la zona de drop (si existe)
+    setDrop(d => d ? ({ ...d, hint: true }) : d);
+    setTimeout(() => setDrop(d => d ? ({ ...d, hint: false }) : d), 900);
+
+    // 3) Globito "arrastra"
+    const rect = el.getBoundingClientRect();
+    const brect = board.getBoundingClientRect();
+    const hint = document.createElement('div');
+    hint.className = 'drag-hint';
+    hint.textContent = 'arrastra';
+    Object.assign(hint.style, {
+      left: `${rect.left - brect.left + rect.width/2}px`,
+      top: `${rect.top - brect.top}px`,
+    });
+    board.appendChild(hint);
+    requestAnimationFrame(() => hint.classList.add('show'));
+    setTimeout(() => {
+      hint.classList.remove('show');
+      setTimeout(() => { try { hint.remove(); } catch {} }, 180);
+    }, 800);
+
+    // Opcional: un "pip" suave y vibraci├│n mini
+    try { SFX.blink(720); } catch {}
+    vibrate(10, vibrateOn);
+  };
+
+  // Peque├▒o "nudge" cuando tocan una ficha de doble toque una sola vez
+  const nudgeDoubleTile = (tileId) => {
+    const board = boardRef.current;
+    if (!board) return;
+
+    const el = board.querySelector(`.tile[data-id="${tileId}"]`);
+    if (!el) return;
+
+    // 1) Wiggle en la ficha
+    el.classList.remove('nudge-shake');
+    // reflow para reiniciar anim
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+    el.classList.add('nudge-shake');
+    setTimeout(() => el.classList.remove('nudge-shake'), 550);
+
+    // 2) Globito "dos veces" o "doble click"
+    const rect = el.getBoundingClientRect();
+    const brect = board.getBoundingClientRect();
+    const hint = document.createElement('div');
+    hint.className = 'drag-hint';
+    hint.textContent = 'dos veces';
+    Object.assign(hint.style, {
+      left: `${rect.left - brect.left + rect.width/2}px`,
+      top: `${rect.top - brect.top}px`,
+    });
+    board.appendChild(hint);
+    requestAnimationFrame(() => hint.classList.add('show'));
+    setTimeout(() => {
+      hint.classList.remove('show');
+      setTimeout(() => { try { hint.remove(); } catch {} }, 180);
+    }, 800);
+
+    // Ô£à FIX: NO reproducir sonido en nudge, el sonido ya se reproduce en la l├¡nea 1726 con SFX.ok(pitch)
+    // try { SFX.blink(720); } catch {}
+    vibrate(10, vibrateOn);
+  };
+
+  // Funci├│n centralizada para restaurar ficha especial
+  const restoreSpecialTile = (reason = 'unknown') => {
+    const board = boardRef.current;
+    const id = specialIdRef.current;
+    if (!board || id == null) return;
+
+    const el = board.querySelector(`.tile[data-id="${id}"]`);
+    if (!el) return;
+
+    // Usa el snapshot en ref o, si no existe, el de data-attrs (fallback)
+    let orig = originalPositionRef.current;
+    if (!orig && el.dataset.origX) {
+      orig = {
+        x: parseFloat(el.dataset.origX),
+        y: parseFloat(el.dataset.origY),
+        width: parseFloat(el.dataset.origW),
+        height: parseFloat(el.dataset.origH),
+      };
+    }
+    if (!orig) {
+      console.warn('restoreSpecialTile: no original position', { reason, id });
+      return;
+    }
+
+    el.style.position = 'absolute';
+    el.style.left = `${orig.x}px`;
+    el.style.top = `${orig.y}px`;
+    el.style.width = `${orig.width}px`;
+    el.style.height = `${orig.height}px`;
+    el.classList.remove('dragging');
+    el.style.zIndex = '';
+    el.style.pointerEvents = ''; // vuelve a ser clicable
+    setDraggingId(null);
+    draggingPointerIdRef.current = null;
+
+  };
+
+  // Funci├│n para verificar si est├í dentro del ├írea magn├®tica
+  const insideMagnetic = (cxViewport, cyViewport, dropZone, boardEl, MAGNET = 48) => {
+    if (!dropZone || !boardEl) return false;
+    const br = boardEl.getBoundingClientRect();
+    const cx = cxViewport - br.left;
+    const cy = cyViewport - br.top;
+    return (
+      cx > dropZone.x - MAGNET &&
+      cx < dropZone.x + dropZone.w + MAGNET &&
+      cy > dropZone.y - MAGNET &&
+      cy < dropZone.y + dropZone.h + MAGNET
+    );
+  };
+
+  // Funci├│n para pintar y bloquear ficha (usada solo para drag & drop)
+  const paintAndLock = (id) => {
+    const el = boardRef.current?.querySelector(`.tile[data-id="${id}"]`);
+    if (el) {
+      const pitch = parseFloat(el.dataset.pitch||'880');
+      el.style.background = (paintRef.current || accent);
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.7';
+      SFX.ok(pitch);
+      vibrate(20, vibrateOn);
+    }
+  };
+
+  // Funci├│n para avanzar paso
+  const advance = () => {
+    stepRef.current++;
+    if (stepRef.current >= seqRef.current.length) {
+      // GANAR
+      if (!endedRef.current) {
+        endedRef.current = true;
+        const spent = Math.ceil((Date.now() - startTimeRef.current) / 1000);
+        saveTotal(spent);
+        
+        // ­ƒöÑ GUARDAR TIEMPO RESTANTE para calcular puntos despu├®s (en nextLevel)
+        timeRemainingRef.current = timeFor(level) - time;
+        console.log(`Ô£à [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+        
+        // Guardar progreso en API (nivel desbloqueado = actual + 1)
+        try {
+          if (window.LUM_API) {
+            const isPracticeMode = practiceModeLevel !== null;
+            const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+            
+            if (!isPracticeMode && !isRetry) {
+              // ÔÜá´©Å NO actualizar puntos aqu├¡ - Se actualiza cuando el usuario hace click en "Siguiente nivel"
+              
+              // Actualizar currentLevel al avanzar
+              if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
+              levelWonRef.current = true; // Marcar que ya ganamos este nivel
+            }
+            
+            // ÔÜá´©Å NO GUARDAR AQU├ì - Se guarda cuando el usuario hace click en "Siguiente nivel"
+            // El usuario puede reintentar el nivel, as├¡ que no guardamos hasta confirmar con "Siguiente"
+          }
+        } catch (_) {}
+      }
+      
+      if (timerRef.current) { clearInterval(timerRef.current); }
+      setRunning(false); 
+      runningRef.current = false; 
+      setWin(true);
+      try { SFX.winMelody((melodyRef.current||[]).slice(0,6)); } catch {}
+    }
+  };
+
+  // Funci├│n para fallar paso
+  const failStep = () => {
+    SFX.fail();
+    vibrate(80, vibrateOn);
+    stepRef.current = 0;
+    resetTiles();
+    partiallyTouchedRef.current.clear();
+    setPartiallyTouched(new Set());
+    
+    // Reposicionar fichas especiales a su posici├│n original si est├ín en absolute/fixed
+    const board = boardRef.current;
+    if (board && specialIdRef.current !== null && originalPositionRef.current) {
+      const specialTile = board.querySelector(`.tile[data-id="${specialIdRef.current}"]`);
+      if (specialTile) {
+        // Restaurar posici├│n original exacta
+        specialTile.style.position = 'absolute';
+        specialTile.style.left = `${originalPositionRef.current.x}px`;
+        specialTile.style.top = `${originalPositionRef.current.y}px`;
+        specialTile.style.width = `${originalPositionRef.current.width}px`;
+        specialTile.style.height = `${originalPositionRef.current.height}px`;
+        specialTile.style.zIndex = '';
+        specialTile.style.pointerEvents = '';
+        specialTile.classList.remove('dragging');
+      }
+    }
+  };
+  const startTimeRef = useRef(0);
+  const melodyRef = useRef([]);
+  const paintRef = useRef(accent);
+  const endedRef = useRef(false);
+
+  useEffect(()=>{ const root=boardRef.current?.closest('.device'); if(root) root.style.setProperty('--accent', accent); },[accent]);
+
+  const saveTotal=(secs)=>{ try{ const prev=Number(JSON.parse(localStorage.getItem('lum_total')||'0'))||0; const next=prev+secs; localStorage.setItem('lum_total', JSON.stringify(next)); setTotalTime(next); if (typeof onTotalUpdate === 'function') onTotalUpdate(next); }catch{} };
+
+  function placeTiles(n, currentSpecialId = null, doubleTilesOverride = null){
+    // Determinar qu├® set usar seg├║n el mundo/nivel
+    const config = getLevelConfig(level);
+    const mechanics = config.mechanics;
+    const isCombo = mechanics.includes('drag') && mechanics.includes('double');
+    
+    const currentDoubleTiles = doubleTilesOverride || (isCombo ? comboDoubleTiles : doubleTouchTilesRef.current);
+    const board = boardRef.current; if(!board) return;
+    board.querySelectorAll('.tile, .dropzone').forEach(e=>e.remove());
+    const rect = board.getBoundingClientRect(); const W=rect.width, H=rect.height;
+    const rand=(min,max)=>Math.random()*(max-min)+min;
+
+    const baseHue = ACCENT_HUE[paintRef.current || accent] ?? 0;
+    const farHue = ()=>{ let hue=Math.floor(Math.random()*360), tries=0; while(Math.min(Math.abs(hue-baseHue), 360-Math.abs(hue-baseHue))<30 && tries++<120){ hue=Math.floor(Math.random()*360);} return hue; };
+
+    // Generar color ├║nico para ficha especial
+    let specialColor = null;
+    const currentWorld = Math.floor((level-1)/10) + 1;
+    if (currentWorld >= 2 && currentSpecialId !== null) {
+      // Asegurar que la ficha especial tenga un color ├║nico (fucsia/magenta)
+      specialColor = `hsl(300 96% 58%)`; // Fucsia vibrante
+    }
+
+    const placed=[];
+    const usedColors = new Set(); // Para evitar colores duplicados
+    
+    for(let i=0;i<n;i++){
+      let w=0,h=0,x=0,y=0,ok=false,guard=0;
+      while(!ok && guard++<300){
+        w=Math.max(56,Math.min(140,60+Math.random()*80));
+        h=Math.max(56,Math.min(160,60+Math.random()*100));
+        x=Math.max(8,Math.min(W-w-8, rand(0,W-w)));
+        y=Math.max(8,Math.min(H-h-8, rand(0,H-h)));
+        ok = !placed.some(p=>!(x+w<=p.x || p.x+p.w<=x || y+h<=p.y || p.y+p.h<=y));
+      }
+      placed.push({x,y,w,h});
+      const b=document.createElement('button'); b.type='button'; b.className='tile';
+      
+      // Asignar color: especial si es la ficha especial, aleatorio para las dem├ís
+      let tileColor;
+      if (currentSpecialId === i && specialColor) {
+        tileColor = specialColor;
+        usedColors.add(specialColor);
+      } else {
+        // Generar color aleatorio que no sea fucsia y no est├® usado
+        let hue;
+        do {
+          hue = farHue();
+          tileColor = `hsl(${hue} 96% 58%)`;
+        } while (usedColors.has(tileColor) || tileColor === specialColor);
+        usedColors.add(tileColor);
+      }
+      
+      Object.assign(b.style,{ left:x+'px', top:y+'px', width:w+'px', height:h+'px', background: tileColor });
+      // blindaje extra: si por casualidad coincide exactamente con el color de nivel, vira 180┬║
+      if (b.style.background === (paintRef.current || accent)) {
+        const alt = (((ACCENT_HUE[paintRef.current || accent] || 0) + 180) % 360);
+        b.style.background = `hsl(${alt} 96% 58%)`;
+      }
+      b.dataset.id=String(i);
+      b.dataset.orig=b.style.background;
+      const m=melodyRef.current||[]; b.dataset.pitch=String((m[i % m.length])||660);
+      
+      const config = getLevelConfig(level);
+      const mechanics = config.mechanics;
+      const currentWorld = Math.floor((level-1)/10) + 1;
+      
+      // Configurar cursor por defecto
+      b.style.cursor = 'pointer';
+      
+      // Marcar ficha especial para drag & drop
+      if (currentWorld >= 2 && specialIdRef.current === i) {
+        // Agregar clase CSS para identificar ficha especial
+        b.classList.add('special-drag-tile');
+        
+        b.addEventListener('dragstart', (e) => e.preventDefault());
+        b.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+        // ­ƒæë Listener directo: inicia drag SIEMPRE en la especial
+        b.addEventListener('pointerdown', (e) => {
+          onTilePointerDown(e, { id: i });
+        }, { passive: false });
+        
+        // Guardar posici├│n original de la ficha especial
+        setTimeout(() => {
+          const rect = b.getBoundingClientRect();
+          const boardRect = boardRef.current?.getBoundingClientRect();
+          if (boardRect) {
+            const orig = {
+              x: rect.left - boardRect.left,
+              y: rect.top - boardRect.top,
+              width: rect.width,
+              height: rect.height
+            };
+            originalPositionRef.current = orig;
+            b.dataset.origX = String(orig.x);
+            b.dataset.origY = String(orig.y);
+            b.dataset.origW = String(orig.width);
+            b.dataset.origH = String(orig.height);
+          }
+        }, 50);
+      }
+      
+      // Estilos seg├║n mec├ínica (Mundo 5 combo tiene prioridad)
+      if (mechanics.includes('combo') || (mechanics.includes('touch') && mechanics.includes('drag') && mechanics.includes('double'))) {
+        if (comboDragTiles.has(i)) {
+          // Ficha de arrastre en combo - borde sutil del color de la pieza
+          const tileColor = b.style.background;
+          b.style.border = `1px solid ${tileColor}`;
+          b.style.boxShadow = `0 0 8px ${tileColor}88`;
+          b.style.cursor = 'grab';
+          b.addEventListener('pointerdown', (e) => onTilePointerDown(e, i));
+          b.addEventListener('dragstart', (e) => e.preventDefault());
+        } else if (comboDoubleTiles.has(i)) {
+          // Ficha de doble toque en combo - DOS BORDES BLANCOS REALES
+          b.style.setProperty('border', '2px solid white', 'important');
+          b.style.setProperty('outline', '2px solid white', 'important');
+          b.style.setProperty('outline-offset', '4px', 'important');
+        } else {
+          // Ficha de toque normal en combo - sin borde especial
+          b.style.border = '1px solid rgba(255,255,255,0.2)';
+          b.style.boxShadow = 'none';
+        }
+      } else {
+        // Mundos 1-4: mec├ínicas individuales
+        if (currentDoubleTiles.has(i)) {
+          // Ficha de doble toque (Mundo 4) - DOS BORDES BLANCOS REALES
+          b.style.setProperty('border', '2px solid white', 'important');
+          b.style.setProperty('outline', '2px solid white', 'important');
+          b.style.setProperty('outline-offset', '4px', 'important');
+        }
+      }
+      
+      // Configurar cursor final para fichas especiales (despu├®s de toda la l├│gica de mec├ínicas)
+      if (currentWorld >= 2 && specialIdRef.current === i) {
+        b.style.cursor = 'grab';
+      }
+      
+      board.appendChild(b);
+    }
+
+    // Delegaci├│n ├║nica (funciona m├│vil/desktop, sin doble evento)
+    if (board.__lumDeleg) { board.removeEventListener('pointerdown', board.__lumDeleg); }
+    const deleg = (e) => {
+      const el = e.target && e.target.closest && e.target.closest('.tile');
+      if (!el || !board.contains(el) || !runningRef.current) return;
+
+      const id = Number(el.dataset.id);
+      const expected = seqRef.current[stepRef.current];
+      const dragStep = isCurrentStepDrag(expected);
+
+      // Siempre: si tocan la especial, iniciamos drag (no validamos por click)
+      if (el.classList.contains('special-drag-tile') || id === specialIdRef.current) {
+        onTilePointerDown(e, { id });
+        return; // nunca tap() sobre la especial
+      }
+
+      // Si el paso actual espera drag, ignoramos todos los clics (no error)
+      if (dragStep) {
+        return; // ni sonido ni vibraci├│n, s├│lo silencio
+      }
+
+      // Paso normal ÔåÆ permitir tap
+      e.preventDefault && e.preventDefault();
+      tap(id);
+    };
+    board.addEventListener('pointerdown', deleg, { passive: false });
+    board.__lumDeleg = deleg;
+  }
+
+  // Funci├│n para crear zona de drop para ficha especial
+  const createDropZone = (specialTile) => {
+    if (!specialTile || !boardRef.current) return null;
+    
+    const boardRect = boardRef.current.getBoundingClientRect();
+    // Posicionar zona de drop fuera del tablero principal
+    const zoneX = 20;
+    const zoneY = 100;
+    
+    return {
+      x: zoneX,
+      y: zoneY,
+      w: specialTile.w,
+      h: specialTile.h,
+      color: specialTile.backgroundColor,
+      over: false
+    };
+  };
+
+  function blink(id){ 
+    const b=boardRef.current; 
+    const el=b && b.querySelector(`.tile[data-id="${id}"]`); 
+    if(!el) return; 
+    const prev=el.style.background; 
+    const prevBorder=el.style.border; 
+    const prevBoxShadow=el.style.boxShadow; 
+    const prevOutline=el.style.outline; 
+    const prevOutlineOffset=el.style.outlineOffset; 
+    el.classList.add('lit'); 
+    el.style.background = (paintRef.current || accent); 
+    SFX.blink(parseFloat(el.dataset.pitch||'720')); 
+    setTimeout(()=>{ 
+      el.classList.remove('lit'); 
+      // el.style.background=prev; // Comentado para que las fichas se queden marcadas
+      // Restaurar estilos especiales si es ficha de doble toque
+      if(doubleTouchTilesRef.current.has(id)){
+        el.style.border = prevBorder; 
+        el.style.boxShadow = prevBoxShadow; 
+        el.style.outline = prevOutline; 
+        el.style.outlineOffset = prevOutlineOffset; 
+      }
+    }, 260); 
+  }
+  
+  function hint(){ 
+    const s=seqRef.current; 
+    if(s && s.length) blink(s[0]); 
+  }
+  
+  function resetTiles(){ 
+    const b=boardRef.current; 
+    if(!b) return; 
+    b.querySelectorAll('.tile').forEach((el)=>{ 
+      el.style.background=el.dataset.orig||el.style.background; 
+      el.classList.remove('lit');
+      el.style.opacity = '1'; // Restaurar opacidad para fichas de doble toque
+    }); 
+  }
+
+  function start(nextLevelArg){
+    const lv = (typeof nextLevelArg === 'number' ? nextLevelArg : level);
+    const root = boardRef.current?.closest('.device');
+    paintRef.current = colorForLevel(lv);
+    if (root) root.style.setProperty('--accent', paintRef.current);
+
+    // Verificar si hay tutorial para este nivel
+    const tutorial = getTutorial(lv);
+    if (tutorial) {
+      setTutorialContent(tutorial);
+      setShowTutorial(true);
+      return; // No iniciar el nivel hasta que se cierre el tutorial
+    }
+
+    setWin(false); setLose(false); setGameComplete(false); endedRef.current = false;
+    if(timerRef.current) clearInterval(timerRef.current);
+    const n=tilesFor(lv);
+    // Generar secuencia asegurando que la primera nunca sea especial
+    const allTiles = Array.from({length:n},(_,i)=>i);
+    const firstTile = 0; // La primera ficha siempre es la 0 (nunca especial)
+    const remainingTiles = allTiles.slice(1).sort(()=>Math.random()-0.5);
+    seqRef.current = [firstTile, ...remainingTiles];
+    stepRef.current = 0;
+    melodyRef.current = MELODIES[Math.floor(Math.random()*MELODIES.length)] || [440,494,523,587,659,698,784,880,988,1046,1174,1318,1396,1567,1760];
+    
+    // Configurar mec├ínicas del nivel
+    setupLevelMechanics(lv);
+    
+    // Calcular fichas especiales directamente
+    let currentSpecialId = null;
+    let currentDoubleTiles = new Set();
+    const currentWorld = Math.floor((lv-1)/10) + 1;
+    const config = getLevelConfig(lv);
+    const mechanics = config.mechanics;
+    
+    // NO duplicar l├│gica - setupLevelMechanics ya se encarga de todo
+    // Solo usar los valores que ya se configuraron
+    currentSpecialId = specialIdRef.current;
+    currentDoubleTiles = doubleTouchTilesRef.current;
+    
+    // Crear fichas con DOM (sistema original)
+    placeTiles(n, currentSpecialId, currentDoubleTiles);
+
+    // Crear zona de drop para ficha especial (solo si hay mec├ínica drag)
+    setTimeout(() => {
+      const config = getLevelConfig(lv);
+      if (currentWorld >= 2 && currentSpecialId !== null && config.mechanics.includes('drag')) {
+        const specialTile = boardRef.current?.querySelector(`.tile[data-id="${currentSpecialId}"]`);
+        if (specialTile) {
+          const rect = specialTile.getBoundingClientRect();
+          const boardRect = boardRef.current?.getBoundingClientRect();
+          if (boardRect) {
+            // Posicionar zona de drop en la esquina superior izquierda con margen generoso
+            const boardRect = boardRef.current?.getBoundingClientRect();
+            const margin = 60; // Margen muy generoso para evitar solapamiento con fichas
+            const dropZone = {
+              x: margin, // Esquina izquierda con margen
+              y: margin, // Esquina superior con margen
+              w: rect.width,
+              h: rect.height,
+              color: specialTile.style.backgroundColor,
+              over: false
+            };
+            setDrop(dropZone);
+          }
+        }
+      } else {
+        setDrop(null);
+      }
+    }, 100);
+
+    const t=timeFor(lv); setTime(t); setRunning(true); runningRef.current=true; SFX.start(); startTimeRef.current=Date.now();
+    const t0=Date.now();
+    timerRef.current=setInterval(()=>{
+      const el=(Date.now()-t0)/1000; const rem=Math.max(0,t-el);
+      setTime(Math.ceil(rem));
+      if(rem<=0){
+        if(!endedRef.current){
+          endedRef.current = true;
+          const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
+          saveTotal(spent);
+          
+          // ­ƒöÑ Al PERDER (tiempo agotado): guardar progreso local y servidor
+          try {
+            // 1´©ÅÔâú Guardar LOCAL (siempre)
+            if (typeof onLocalProgressSave === 'function') {
+              onLocalProgressSave(level, spent, 0); // Sin puntos al perder
+            }
+            
+            // 2´©ÅÔâú Intentar guardar en SERVIDOR
+            if (typeof onSyncToServer === 'function') {
+              onSyncToServer(level, spent, 0);
+            }
+          } catch (_) {}
+        }
+        clearInterval(timerRef.current);
+        setRunning(false); runningRef.current=false; 
+        restoreSpecialTile('timeout'); // por si estaba movida
+        setLose(true); SFX.fail(); resetTiles();
+      }
+    },100);
+
+    setTimeout(hint, 1500);
+  }
+
+  // Capturador global de click para anular clicks sint├®ticos tras drag
+  useEffect(() => {
+    const handleClickCapture = (e) => {
+      if (suppressClickRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClickRef.current = false;
+      }
+    };
+    
+    document.addEventListener('click', handleClickCapture, true);
+    return () => document.removeEventListener('click', handleClickCapture, true);
+  }, []);
+
+  // Exponer funciones de test para debugging
+  useEffect(() => {
+    window.LumetrixTest = Object.assign({}, window.LumetrixTest, {
+      start,
+      state: () => ({ level, world, levelInWorld, running, time, seqLen: (seqRef.current || []).length }),
+      tapExpected: () => { const id = seqRef.current[stepRef.current]; if (id != null) tap(id); },
+      tapId: (x) => tap(x),
+      isDragStep: () => { const exp = seqRef.current[stepRef.current]; return isCurrentStepDrag(exp); },
+      test: {
+        ignoreClicksOnDragStep: () => {
+          const exp = seqRef.current[stepRef.current];
+          const wasStep = stepRef.current;
+          if (!isCurrentStepDrag(exp)) return { ok: false, reason: 'not drag step' };
+          const wrong = (exp === 0 ? 1 : 0); // cualquier ficha que NO sea la esperada
+          tap(wrong);                       // deber├¡a ignorarse
+          return { ok: stepRef.current === wasStep, step: stepRef.current, expected: exp };
+        }
+      }
+    });
+  }, [level, world, levelInWorld, running, time]);
+
+  // Funci├│n para manejar pointerdown en ficha
+  const onTilePointerDown = (e, tile) => {
+    if (!runningRef.current) return;
+    const expected = seqRef.current[stepRef.current];
+    const board = boardRef.current;
+    const el = board?.querySelector(`.tile[data-id="${tile.id}"]`);
+    if (!el) return; // seguridad
+
+    if (tile.id === specialIdRef.current) {
+      // Siempre drag, jam├ís validaci├│n por click
+      e.preventDefault();
+      e.stopPropagation();
+      const r = el.getBoundingClientRect();
+      
+      // Guardar posici├│n inicial para detectar tap vs drag
+      dragStartRef.current = { x: r.left, y: r.top };
+      
+      // Activar supresi├│n de click sint├®tico
+      suppressClickRef.current = true;
+      
+      setDraggingId(tile.id);
+      draggingPointerIdRef.current = e.pointerId ?? null;
+      dragOffsetRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
+      dragPosRef.current = { x: r.left, y: r.top };
+      el.style.zIndex = 1000;
+      el.classList.add('dragging');
+      el.style.pointerEvents = 'none';
+      el.style.touchAction = 'none';
+      return;
+    }
+
+    // ficha normal: solo si es su turno
+    if (tile.id !== expected) return failStep();
+    paintAndLock(tile.id); // pinta a verde y desactiva
+    advance();
+  };
+
+  function tap(id){
+    if(!runningRef.current) return; 
+    
+    const config = getLevelConfig(level);
+    
+    // Ignorar taps sobre la especial cuando la mec├ínica es drag
+    if (config.mechanics.includes('drag') && id === specialIdRef.current) {
+      return; // NUNCA validar por tap la especial
+    }
+    
+    const expected=seqRef.current[stepRef.current];
+    const board=boardRef.current;
+    
+    // Si este paso requiere ARRASTRE, ignoramos cualquier tap
+    if (isCurrentStepDrag(expected)) {
+      return; // sin fallo
+    }
+    
+    const el=board && board.querySelector(`.tile[data-id="${id}"]`); 
+    if(!el) return;
+    
+    const pitch = parseFloat(el.dataset.pitch||'880');
+    
+    // Usar la referencia persistente de doubleTouchTiles
+    const isDoubleTile = doubleTouchTilesRef.current.has(id);
+    const isComboDouble = (config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && comboDoubleTiles.has(id);
+    
+    // L├│gica de doble toque (Mundo 4+) y combo (Mundo 5)
+    if ((isDoubleTile && config.mechanics.includes('double')) || isComboDouble) {
+      // Solo permitir tocar fichas de doble toque cuando sea su turno
+      if (id === expected) {
+        if (partiallyTouchedRef.current.has(id)) {
+          // Segundo toque - completar doble toque
+          el.style.opacity = '1';
+          blink(id); // Usar funci├│n blink para el efecto de brillo
+          SFX.ok(pitch); 
+          vibrate(20, vibrateOn);
+          stepRef.current++;
+          
+          // Limpiar estado de doble toque
+          partiallyTouchedRef.current.delete(id);
+          setPartiallyTouched(new Set(partiallyTouchedRef.current));
+        } else {
+          // Primer toque - marcar como parcialmente tocada
+          // NO cambiar el color, solo reducir opacidad para indicar que est├í parcialmente tocada
+          el.style.opacity = '0.6';
+          blink(id); // Usar funci├│n blink para el efecto de brillo
+          SFX.ok(pitch); 
+          vibrate(20, vibrateOn);
+          
+          // A├▒adir a fichas parcialmente tocadas
+          partiallyTouchedRef.current.add(id);
+          setPartiallyTouched(new Set(partiallyTouchedRef.current));
+          
+          // Mostrar nudge para guiar al jugador
+          nudgeDoubleTile(id);
+          
+          return; // No avanzar paso a├║n
+        }
+      } else {
+        // Ficha de doble toque pero no es su turno - error
+        SFX.fail(); 
+        vibrate(80, vibrateOn); 
+        stepRef.current = 0; 
+        resetTiles();
+        partiallyTouchedRef.current.clear();
+        setPartiallyTouched(new Set());
+        return;
+      }
+    } else if (id === expected) {
+      // Toque normal en ficha correcta
+      blink(id); // Usar funci├│n blink para el efecto de brillo
+      SFX.ok(pitch); 
+      vibrate(20, vibrateOn);
+      stepRef.current++;
+      
+      // Actualizar zona de drop para Mundo 2+ y combo
+      const currentWorld = Math.floor((level-1)/10) + 1;
+      if ((currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) && stepRef.current < seqRef.current.length) {
+        // Crear nueva zona de drop para la siguiente ficha especial
+        setTimeout(() => {
+          const currentWorld = Math.floor((level-1)/10) + 1;
+          if (currentWorld >= 2 && specialIdRef.current !== null) {
+            const specialTile = boardRef.current?.querySelector(`.tile[data-id="${specialIdRef.current}"]`);
+            if (specialTile) {
+              // Posicionar zona de drop en la esquina superior izquierda con margen generoso
+              const boardRect = boardRef.current?.getBoundingClientRect();
+              const margin = 60; // Margen muy generoso para evitar solapamiento con fichas
+              const dropZone = {
+                x: margin, // Esquina izquierda con margen
+                y: margin, // Esquina superior con margen
+                w: specialTile.offsetWidth,
+                h: specialTile.offsetHeight,
+                color: specialTile.style.backgroundColor,
+                over: false
+              };
+              setDrop(dropZone);
+            }
+          }
+        }, 100);
+      } else if (currentWorld >= 2 || config.mechanics.includes('combo') || (config.mechanics.includes('touch') && config.mechanics.includes('drag') && config.mechanics.includes('double'))) {
+        setDrop(null); // No m├ís zonas cuando se complete la secuencia
+      }
+      
+      if(stepRef.current>=seqRef.current.length){
+          if(!endedRef.current){
+            endedRef.current = true;
+            const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
+            saveTotal(spent);
+            
+            // ­ƒöÑ GUARDAR TIEMPO RESTANTE para calcular puntos despu├®s (en nextLevel)
+            timeRemainingRef.current = timeFor(level) - time;
+            console.log(`Ô£à [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+            
+            // Al GANAR: guardar progreso en API (pr├│ximo nivel desbloqueado)
+            try {
+              if (window.LUM_API) {
+                const isPracticeMode = practiceModeLevel !== null;
+                const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+                
+                if (!isPracticeMode && !isRetry) {
+                  // ÔÜá´©Å NO actualizar puntos aqu├¡ - Se actualiza cuando el usuario hace click en "Siguiente nivel"
+                  
+                  // Actualizar currentLevel al avanzar
+                  if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
+                  levelWonRef.current = true; // Marcar que ya ganamos este nivel
+                }
+                
+                // ÔÜá´©Å NO GUARDAR AQU├ì - Se guarda cuando el usuario hace click en "Siguiente nivel"
+                // El usuario puede reintentar el nivel, as├¡ que no guardamos hasta confirmar con "Siguiente"
+              }
+            } catch (_) { /* opcional: mostrar un aviso suave */ }
+          }
+          if (timerRef.current) { clearInterval(timerRef.current); }
+          setRunning(false); runningRef.current=false;
+          
+          // Verificar si es el nivel 50 (final del juego)
+          if (level === 50) {
+            setGameComplete(true);
+          } else {
+            setWin(true);
+          }
+          
+          try { SFX.winMelody((melodyRef.current||[]).slice(0,6)); } catch {}
+        }
+    } else {
+      // Error - resetear todo incluyendo doble toque
+      SFX.fail(); 
+      vibrate(80, vibrateOn); 
+      stepRef.current = 0; 
+      restoreSpecialTile('wrong-tap'); // ÔåÉ clave cuando ven├¡as de un drag v├ílido
+      resetTiles();
+      partiallyTouchedRef.current.clear();
+      setPartiallyTouched(new Set());
+    }
+  }
+
+  function nextLevel(){
+    // ­ƒöÑ CALCULAR Y ACTUALIZAR PUNTOS del nivel reci├®n ganado
+    const isPracticeMode = practiceModeLevel !== null;
+    const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+    const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeRemainingRef.current);
+    const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+    
+    console.log(`­ƒôè [NEXT] Calculando puntos - isPractice: ${isPracticeMode}, isRetry: ${isRetry}, timeRemaining: ${timeRemainingRef.current}s, puntosDelNivel: ${puntosDelNivel}, totalPuntos: ${totalPuntos}, nuevoTotal: ${nuevoTotalPuntos}`);
+    
+    // Actualizar puntos en pantalla (SIEMPRE, para que se vea en el header)
+    setTotalPuntos(nuevoTotalPuntos);
+    if (typeof onPuntosUpdate === 'function') {
+      onPuntosUpdate(nuevoTotalPuntos); // Actualizar en el padre (App)
+    }
+    
+    // ­ƒöÑ GUARDAR PROGRESO antes de avanzar (confirmaci├│n del usuario)
+    const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
+    const tiempoAGuardar = time;
+    const puntosAGuardar = nuevoTotalPuntos; // Usar los puntos actualizados
+    
+    console.log(`­ƒôè [SAVE NEXT] Guardando progreso al hacer click en Siguiente - Nivel: ${nivelAGuardar}, Tiempo: ${tiempoAGuardar}, Puntos del nivel: ${puntosDelNivel}, Total puntos: ${puntosAGuardar}`);
+    
+    // 1´©ÅÔâú Guardar LOCAL (siempre, funciona offline)
+    if (typeof onLocalProgressSave === 'function') {
+      onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+    }
+    
+    // 2´©ÅÔâú Intentar guardar en SERVIDOR (si hay sesi├│n)
+    if (typeof onSyncToServer === 'function') {
+      onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+    }
+    
+    setWin(false); setLose(false); setGameComplete(false);
+    const nl = level + 1;
+    // Si el siguiente nivel es mayor que el nivel actual de progreso, salir del modo pr├íctica
+    if (nl > currentLevel && typeof onExitPracticeMode === 'function') {
+      onExitPracticeMode();
+    }
+    levelWonRef.current = false; // Resetear flag al cambiar de nivel
+    setLevel(nl);
+    setTimeout(()=>start(nl), 0);
+  }
+
+  useEffect(()=>{ window.LumetrixTest = { start, state:()=>({level,world,levelInWorld,running,time,seqLen:(seqRef.current||[]).length}), tapExpected:()=>{ const id=seqRef.current[stepRef.current]; if(id!=null) tap(id); } }; },[level,world,levelInWorld,running,time]);
+
+  // Ô£à Reiniciar nivel cuando se selecciona desde el selector
+  useEffect(() => {
+    if (restartTrigger > 0) {
+      // Detener nivel actual si est├í corriendo
+      if (running) {
+        clearInterval(timerRef.current);
+        setRunning(false);
+        runningRef.current = false;
+      }
+      // Reiniciar con el nuevo nivel
+      setTimeout(() => start(level), 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartTrigger]);
+
+  // Event listeners para drag & drop robusto
+  useEffect(() => {
+    const move = (ev) => {
+      if (draggingId == null) return;
+      if (draggingPointerIdRef.current !== null &&
+          ev.pointerId !== draggingPointerIdRef.current) return;
+
+      const nx = ev.clientX - dragOffsetRef.current.x;
+      const ny = ev.clientY - dragOffsetRef.current.y;
+      const el = boardRef.current?.querySelector(`.tile[data-id="${draggingId}"]`);
+      
+      if (!el) return;
+      
+      // Solo cambiar a fixed cuando haya movimiento significativo (m├ís de 5px)
+      const dx = Math.abs(nx - dragPosRef.current.x);
+      const dy = Math.abs(ny - dragPosRef.current.y);
+      const threshold = 5;
+      
+      if (dx > threshold || dy > threshold || el.style.position === 'fixed') {
+        el.style.position = 'fixed';
+        el.style.left = `${nx}px`;
+        el.style.top = `${ny}px`;
+        dragPosRef.current = { x: nx, y: ny };
+      }
+
+      const cx = nx + (el?.offsetWidth || 0) / 2;
+      const cy = ny + (el?.offsetHeight || 0) / 2;
+      const inside = insideMagnetic(cx, cy, drop, boardRef.current, 48);
+      setDrop(d => d ? ({...d, over: inside}) : null);
+    };
+
+    const up = (ev) => {
+      if (draggingId == null) return;
+      if (draggingPointerIdRef.current !== null &&
+          ev.pointerId !== draggingPointerIdRef.current) return;
+
+      const expected = seqRef.current[stepRef.current];
+      const el = boardRef.current?.querySelector(`.tile[data-id="${draggingId}"]`);
+      const nx = dragPosRef.current.x;
+      const ny = dragPosRef.current.y;
+      const cx = nx + (el?.offsetWidth || 0) / 2;
+      const cy = ny + (el?.offsetHeight || 0) / 2;
+      const inside = insideMagnetic(cx, cy, drop, boardRef.current, 48);
+
+      // Debug info
+      console.debug('Drag drop validation:', {
+        expected,
+        draggingId,
+        special: specialIdRef.current,
+        inside,
+        step: stepRef.current,
+        drop: drop
+      });
+
+      if (draggingId === expected && draggingId === specialIdRef.current && inside && el) {
+        // ├ëXITO: snap + pintar + avanzar
+        el.style.position = 'absolute';
+        el.style.left = `${drop.x + (drop.w - el.offsetWidth) / 2}px`;
+        el.style.top = `${drop.y + (drop.h - el.offsetHeight) / 2}px`;
+        
+        // limpiar estado drag
+        setDraggingId(null);
+        draggingPointerIdRef.current = null;
+        setDrop(d => d ? ({...d, over: false}) : null);
+        if (el) {
+          el.classList.remove('dragging');
+          el.style.pointerEvents = '';
+          el.style.zIndex = '';
+        }
+        
+        paintAndLock(draggingId);
+        return advance();
+      } else {
+        // Verificar si fue un tap (movimiento insuficiente) o drag real
+        if (draggingId === specialIdRef.current) {
+          const dist = Math.hypot(nx - dragStartRef.current.x, ny - dragStartRef.current.y);
+          
+          if (dist < DRAG_MIN_PX) {
+            // Fue un TAP: restaurar visual y SALIR sin fallar
+            restoreSpecialTile('tap-detected');
+            setDraggingId(null);
+            draggingPointerIdRef.current = null;
+            setDrop(d => d ? ({...d, over: false}) : null);
+            
+            // Mostrar nudge para guiar al jugador
+            nudgeSpecialTile('tap');
+            
+            return; // No llamar a failStep()
+          } else {
+            // Fue un DRAG real pero fall├│: restaurar y fallar
+            restoreSpecialTile('drop-miss');
+          }
+        }
+        
+        // limpiar estado drag
+        setDraggingId(null);
+        draggingPointerIdRef.current = null;
+        setDrop(d => d ? ({...d, over: false}) : null);
+        
+        failStep(); // no inside / fuera de turno
+      }
+    };
+
+    document.addEventListener('pointermove', move, true);
+    document.addEventListener('pointerup', up, true);
+    document.addEventListener('pointercancel', up, true);
+    
+    return () => {
+      document.removeEventListener('pointermove', move, true);
+      document.removeEventListener('pointerup', up, true);
+      document.removeEventListener('pointercancel', up, true);
+    };
+  }, [draggingId, drop, tiles]);
+
+  return (
+    <section className="screen">
+      <div className="topbar">
+        <div className="brand">
+          <img src={getAssetPath("lumetrix/img/logo2.png")} alt="LUMETRIX" style={{height:'32px',width:'auto'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+          <span style={{display:'none',fontSize:'16px',fontWeight:'900',letterSpacing:'0.1em',color:'#fff'}}>LUMETRIX</span>
+        </div>
+        <div className="icons">
+          <button className="icon" onClick={onOpenLevelSelector} aria-label="Niveles" title="Selector de niveles">
+            <img src={getAssetPath("lumetrix/img/ico_niveles.png") + "?v=2"} alt="Niveles" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'22px',fontWeight:'bold',color:'var(--accent)'}}>Ôëí</span>
+          </button>
+          <button className="icon" onClick={onOpenRanking} aria-label="Ranking">
+            <img src={getAssetPath("lumetrix/img/ico_ranking.png")} alt="Ranking" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'20px'}}>­ƒÅå</span>
+          </button>
+          <button className="icon" onClick={onOpenOptions} aria-label="Opciones">
+            <img src={getAssetPath("lumetrix/img/ico_config.png")} alt="Configuraci├│n" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'20px'}}>ÔÜÖ´©Å</span>
+          </button>
+          <button className="icon" onClick={onOpenAuth} aria-label="Login">
+            <img src={getAssetPath("lumetrix/img/ico_user.png")} alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'20px'}}>­ƒæñ</span>
+          </button>
+        </div>
+      </div>
+      <div className="hud">
+        <div className="timebar"><i className="timefill" style={{ width: `${Math.max(0, Math.min(100, (time / timeFor(level)) * 100))}%` }} /></div>
+        <div className="meta">
+          <span className="chip">Nivel <b>{level}</b></span>
+          <span className="chip"><b>{totalPuntos}</b></span>
+          {practiceModeLevel !== null && (
+            <span className="chip" style={{background:'rgba(255,165,0,0.2)', border:'1px solid #ffa500', color:'#ffa500', fontSize:'11px'}}>PR├üCTICA</span>
+          )}
+          {/* ­ƒöÑ INDICADOR DE SINCRONIZACI├ôN */}
+          {syncStatus === 'syncing' && (
+            <span className="chip" style={{background:'rgba(59,130,246,0.2)', border:'1px solid #3b82f6', color:'#3b82f6', fontSize:'10px', padding:'2px 8px'}} title="Sincronizando con servidor...">
+              Ôƒ│ Sync
+            </span>
+          )}
+          {syncStatus === 'pending' && (
+            <span className="chip" style={{background:'rgba(234,179,8,0.2)', border:'1px solid #eab308', color:'#eab308', fontSize:'10px', padding:'2px 8px'}} title="Progreso pendiente de sincronizar">
+              ÔÅ│ Pendiente
+            </span>
+          )}
+          {syncStatus === 'offline' && (
+            <span className="chip" style={{background:'rgba(156,163,175,0.2)', border:'1px solid #9ca3af', color:'#9ca3af', fontSize:'10px', padding:'2px 8px'}} title="Sin conexi├│n - Trabajando offline">
+              ­ƒôí Offline
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="board" ref={boardRef}>
+        {/* Zona de drop para ficha especial */}
+        {drop && (
+          <div
+            className={`drop-zone ${drop.over ? 'drag-over' : ''} ${drop.hint ? 'pulse' : ''}`}
+            style={{
+              position: 'absolute',
+              left: drop.x,
+              top: drop.y,
+              width: drop.w,
+              height: drop.h,
+              border: `3px dashed ${drop.color}`,
+              borderRadius: '12px',
+              background: 'rgba(0,0,0,0.3)',
+              pointerEvents: 'none',
+              zIndex: 10,
+              transition: 'all 0.2s ease',
+              boxShadow: drop.over ? `0 0 25px ${drop.color}` : `0 0 15px ${drop.color}33`
+            }}
+          />
+        )}
+        
+        {!running && !win && !lose && (
+          <div className="overlay" style={{textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%'}}>
+            <button className="btn-start" onClick={()=>start()}>EMPEZAR</button>
+            <div style={{marginTop:'16px',color:'#ffffff88',fontSize:'16px',fontWeight:600}}>
+              Nivel {level} ÔÇó Mundo {world}
+            </div>
+          </div>
+        )}
+        {win && (
+          <div className="overlay">
+            <div className="card-compact" style={{textAlign:'center'}}>
+              <div style={{fontSize:32, marginBottom:8, textShadow:'0 0 10px var(--neon2), 0 0 20px var(--neon2)'}}>Ô£¿</div>
+              <h3 style={{color:'var(--neon2)', marginBottom:8}}>┬íNivel superado!</h3>
+              <div style={{fontSize:16, color:'#ffffff88', marginBottom:16}}>
+                Puntos: {calculatePuntos(level, timeRemainingRef.current)} pts
+              </div>
+              <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
+                <button className="btn" onClick={()=>{setWin(false); start();}} style={{border:'2px solid #ff6b6b', color:'#ff6b6b', boxShadow:'0 0 10px #ff6b6b44'}}>
+                  Reiniciar
+                </button>
+                <button className="btn btn1" onClick={nextLevel}>Siguiente</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {lose && (
+          <div className="overlay">
+            <div className="card-compact" style={{textAlign:'center'}}>
+              <div style={{fontSize:32, marginBottom:8, textShadow:'0 0 10px var(--neon1), 0 0 20px var(--neon1)'}}>­ƒÆö</div>
+              <h3 style={{color:'var(--neon1)', marginBottom:12}}>Tiempo agotado</h3>
+              <button className="btn btn1" onClick={()=>start()}>Reintentar</button>
+            </div>
+          </div>
+        )}
+        {gameComplete && (
+          <div className="overlay">
+            <div className="card-compact" style={{textAlign:'center', maxWidth:'90vw', padding:'24px'}}>
+              <div style={{fontSize:48, marginBottom:16, textShadow:'0 0 20px #ffd700, 0 0 40px #ffd700'}}>­ƒÅå</div>
+              <h2 style={{color:'#ffd700', marginBottom:16, fontSize:'24px', fontWeight:'bold', textShadow:'0 0 10px #ffd700'}}>
+                ┬íCRACK TOTAL! ­ƒÄ»
+              </h2>
+              <p style={{color:'#ffffff', marginBottom:20, fontSize:'16px', lineHeight:'1.4'}}>
+                Has completado todos los 50 niveles.<br/>
+                ┬íEres una m├íquina de LUMETRIX! ­ƒñû
+              </p>
+              <p style={{color:'#00ffff', marginBottom:24, fontSize:'14px', fontStyle:'italic'}}>
+                Si hay m├ís cracks como t├║,<br/>
+                a├▒adiremos m├ís niveles. ┬íSigue practicando! ­ƒÆ¬
+              </p>
+              <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
+                <button className="btn btn1" onClick={()=>{setGameComplete(false); setLevel(1);}}>
+                  Reiniciar
+                </button>
+                <button className="btn btn1" onClick={()=>{setGameComplete(false); onOpenRanking();}}>
+                  Ranking
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showTutorial && tutorialContent && (
+          <div className="overlay" style={{zIndex: 1000}}>
+            <div className="card" style={{textAlign:'center', maxWidth:'400px', padding:'28px'}}>
+              <div style={{fontSize:48, marginBottom:16}}>{tutorialContent.icon}</div>
+              <h3 style={{color:'var(--accent)', marginBottom:20, fontSize:'20px'}}>{tutorialContent.title}</h3>
+              <div style={{textAlign:'left', marginBottom:24}}>
+                {tutorialContent.steps.map((step, idx) => (
+                  <div key={idx} style={{
+                    display:'flex',
+                    alignItems:'flex-start',
+                    gap:'12px',
+                    marginBottom:'12px',
+                    fontSize:'14px',
+                    lineHeight:'1.5',
+                    color:'#ffffffdd'
+                  }}>
+                    <span style={{
+                      minWidth:'24px',
+                      height:'24px',
+                      borderRadius:'50%',
+                      background:'var(--accent)',
+                      color:'#000',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                      fontWeight:'bold',
+                      fontSize:'12px',
+                      marginTop:'2px'
+                    }}>
+                      {idx + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="btn btn1" 
+                onClick={() => {
+                  setShowTutorial(false);
+                  localStorage.setItem(`lum_tutorial_${level}`, '1');
+                  // Reiniciar el nivel despu├®s de cerrar el tutorial
+                  setTimeout(() => start(), 100);
+                }}
+                style={{width:'100%', padding:'14px', fontSize:'16px', fontWeight:'bold'}}
+              >
+                ┬íEntendido!
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="bokeh"><i className="b1"/><i className="b2"/><i className="b3"/></div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------- Modales ----------------
+function Ranking({ onClose, total }){
+  const [rankingData, setRankingData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUserEmail, setCurrentUserEmail] = useState(null);
+  const myPositionRef = useRef(null);
+
+  useEffect(() => {
+    const loadRanking = async () => {
+      try {
+        if (window.LUM_API && window.LUM_API.api) {
+          // Obtener usuario actual
+          const sessionResult = await window.LUM_API.api('auth.php?action=check_session');
+          if (sessionResult && sessionResult.success) {
+            setCurrentUserEmail(sessionResult.user.email);
+          }
+
+          // Obtener ranking
+          const result = await window.LUM_API.api('ranking.php?action=global');
+          if (result && result.success && result.data) {
+            setRankingData(result.data.map((player, index) => ({
+              rank: index + 1,
+              name: player.nick,
+              email: player.email,
+              level: player.level,
+              puntos: player.total_puntos,
+              world: Math.floor((player.level - 1) / 10) + 1
+            })));
+          }
+        }
+      } catch (e) {
+        setRankingData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRanking();
+  }, []);
+
+  // Scroll autom├ítico a la posici├│n del usuario
+  useEffect(() => {
+    if (!loading && myPositionRef.current) {
+      setTimeout(() => {
+        myPositionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [loading, rankingData]);
+
+  const getRankColor = (rank) => {
+    if (rank === 1) return '#FFD700'; // Oro
+    if (rank === 2) return '#C0C0C0'; // Plata
+    if (rank === 3) return '#CD7F32'; // Bronce
+    return '#00ffff'; // Cian
+  };
+
+  const getRankIcon = (rank) => {
+    if (rank === 1) return '1';
+    if (rank === 2) return '2';
+    if (rank === 3) return '3';
+    return rank;
+  };
+
+  return (
+    <div className="modal"><div className="card" style={{border:'2px solid #00ffff',boxShadow:'0 0 20px #00ffff44'}}>
+      <button className="closer" onClick={onClose} style={{border:'2px solid #00ffff',boxShadow:'0 0 10px #00ffff',background:'#000'}}>Ô£ò</button>
+      <h3 style={{ color: '#00ffff', marginTop:0, textShadow:'0 0 10px #00ffff, 0 0 20px #00ffff', fontSize:'20px' }}>RANKING GLOBAL</h3>
+      {loading ? (
+        <div style={{textAlign:'center',padding:'40px',color:'#00ffff66'}}>Cargando ranking...</div>
+      ) : rankingData.length === 0 ? (
+        <div style={{textAlign:'center',padding:'40px',color:'#00ffff66'}}>
+          <div style={{fontSize:16,marginBottom:8}}>A├║n no hay jugadores</div>
+          <div style={{fontSize:12}}>┬íS├® el primero en aparecer aqu├¡!</div>
+        </div>
+      ) : (
+        <div className="list" style={{gap:'8px',maxHeight:'400px',overflowY:'auto',paddingRight:'4px'}}>
+          {rankingData.map(player => {
+            const isCurrentUser = currentUserEmail && player.email === currentUserEmail;
+            return (
+              <div 
+                key={player.rank} 
+                ref={isCurrentUser ? myPositionRef : null}
+                style={{
+                  background: isCurrentUser ? 'rgba(255,215,0,0.15)' : 'rgba(0,255,255,0.1)',
+                  border: isCurrentUser ? '2px solid #FFD700' : '1px solid #00ffff33',
+                  borderRadius:'8px',
+                  padding:'10px',
+                  display:'flex',
+                  justifyContent:'space-between',
+                  alignItems:'center',
+                  position: 'relative',
+                  boxShadow: isCurrentUser ? '0 0 12px rgba(255,215,0,0.3)' : 'none'
+                }}>
+                {isCurrentUser && (
+                  <div style={{
+                    position:'absolute',
+                    right:'4px',
+                    top:'4px',
+                    background:'#FFD700',
+                    color:'#000',
+                    fontSize:'8px',
+                    fontWeight:'bold',
+                    padding:'1px 4px',
+                    borderRadius:'6px',
+                    zIndex: 10
+                  }}>
+                    T├Ü
+                  </div>
+                )}
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <span style={{
+                    color: getRankColor(player.rank), 
+                    fontWeight:'bold', 
+                    fontSize:'14px',
+                    minWidth:'30px'
+                  }}>
+                    #{getRankIcon(player.rank)}
+                  </span>
+                  <span style={{color: isCurrentUser ? '#FFD700' : '#fff', fontSize:'12px', fontWeight: isCurrentUser ? 'bold' : 'normal'}}>{player.name}</span>
+                </div>
+                <div style={{textAlign:'right', fontSize:'11px', opacity:0.8}}>
+                  <div>Mundo {player.world} ÔÇó Nivel {player.level}</div>
+                  <div style={{color: isCurrentUser ? '#FFD700' : '#00ffff'}}>{player.puntos} pts</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div></div>
+  );
+}
+function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibrateOn, setSoundOn, setMusicOn, setVibrateOn, onResetTotal, musicVolume, setMusicVolume }){
+  return (
+    <div className="modal"><div className="card" style={{border:'2px solid #39ff14',boxShadow:'0 0 20px #39ff1444'}}>
+      <button className="closer" onClick={onClose} style={{border:'2px solid #39ff14',boxShadow:'0 0 10px #39ff14',background:'#000'}}>Ô£ò</button>
+      <h3 style={{ color: '#39ff14', marginTop:0, textShadow:'0 0 10px #39ff14, 0 0 20px #39ff14', fontSize:'20px' }}>CONFIGURACI├ôN</h3>
+      <div className="list" style={{gap:'12px'}}>
+        <label style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center',background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
+          <span style={{color:'#39ff14',fontWeight:'bold'}}>M├║sica de fondo</span>
+          <input type="checkbox" checked={musicOn} onChange={e=>setMusicOn(e.target.checked)} style={{transform:'scale(1.2)',accentColor:'#39ff14'}} />
+        </label>
+        {musicOn && (
+          <div style={{background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
+            <div style={{color:'#39ff14',fontWeight:'bold',marginBottom:'8px',display:'flex',alignItems:'center',gap:'8px'}}>
+              Volumen: {Math.round(musicVolume * 100)}%
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="1" 
+              step="0.1" 
+              value={musicVolume} 
+              onChange={e=>setMusicVolume(parseFloat(e.target.value))}
+              style={{
+                width:'100%',
+                accentColor:'#39ff14',
+                background:'transparent'
+              }}
+            />
+          </div>
+        )}
+        <label style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'center',background:'rgba(57,255,20,0.1)',border:'1px solid #39ff1433',borderRadius:'8px',padding:'12px'}}>
+          <span style={{color:'#39ff14',fontWeight:'bold'}}>Vibraci├│n</span>
+          <input type="checkbox" checked={vibrateOn} onChange={e=>setVibrateOn(e.target.checked)} style={{transform:'scale(1.2)',accentColor:'#39ff14'}} />
+        </label>
+      </div>
+    </div></div>
+  );
+}
+function Auth({ onClose }){
+  // Ô£à CARGAR CREDENCIALES GUARDADAS AL INICIAR
+  const savedEmail = localStorage.getItem('lum_user_email') || '';
+  const savedToken = localStorage.getItem('lum_user_token') || '';
+  const savedPassword = savedToken ? atob(savedToken) : '';
+  
+  const [mode, setMode] = useState('login'); // 'login' o 'register'
+  const [username, setUsername] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [email, setEmail] = useState(savedEmail); // Ô£à Pre-rellenado
+  const [password, setPassword] = useState(savedPassword); // Ô£à Pre-rellenado
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async () => {
+    if (!nombre || !username || !email || !password) {
+      setMessage('ÔØî Rellena todos los campos');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=register', {
+        method: 'POST',
+        body: JSON.stringify({ nombre, username, email, password })
+      });
+      
+      if (result.success) {
+        setMessage('Ô£à ┬íRegistrado! Ahora inicia sesi├│n');
+        setMode('login');
+        setPassword('');
+      } else {
+        setMessage('ÔØî ' + (result.message || 'Error en registro'));
+      }
+    } catch (e) {
+      setMessage('ÔØî Error de conexi├│n');
+    }
+    
+    setLoading(false);
+  };
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setMessage('ÔØî Rellena email y contrase├▒a');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const result = await window.LUM_API.api('auth.php?action=login', {
+        method: 'POST',
+        body: JSON.stringify({ username: email, password })
+      });
+      
+      if (result.success) {
+        // Ô£à GUARDAR CREDENCIALES EN LOCALSTORAGE para auto-login
+        try {
+          localStorage.setItem('lum_user_email', email);
+          localStorage.setItem('lum_user_token', btoa(password)); // Codificado en base64 (b├ísico)
+          console.log('Ô£à Credenciales guardadas para auto-login');
+        } catch (e) {
+          console.log('ÔÜá´©Å No se pudieron guardar credenciales:', e);
+        }
+        
+        setMessage('Ô£à ┬íBienvenido!');
+        setTimeout(() => {
+          window.location.reload(); // Recargar para actualizar estado
+        }, 500);
+      } else {
+        setMessage('ÔØî ' + (result.message || 'Credenciales incorrectas'));
+      }
+    } catch (e) {
+      setMessage('ÔØî Error de conexi├│n');
+    }
+    
+    setLoading(false);
+  };
+
+  return (
+    <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
+      <button className="closer" onClick={onClose} style={{border:'2px solid #ff00ff',boxShadow:'0 0 10px #ff00ff',background:'#000'}}>Ô£ò</button>
+      
+      {/* Login/Registro */}
+      <>
+          {/* Tabs */}
+          <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'1px solid #ff00ff33',paddingBottom:8}}>
+            <button 
+              onClick={() => setMode('login')}
+              style={{
+                background: mode === 'login' ? 'rgba(255,0,255,0.2)' : 'transparent',
+                border: 'none',
+                color: mode === 'login' ? '#ff00ff' : '#ffffff66',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontWeight: mode === 'login' ? 'bold' : 'normal',
+                fontSize: '14px'
+              }}
+            >
+              Entrar
+            </button>
+            <button 
+              onClick={() => setMode('register')}
+              style={{
+                background: mode === 'register' ? 'rgba(255,0,255,0.2)' : 'transparent',
+                border: 'none',
+                color: mode === 'register' ? '#ff00ff' : '#ffffff66',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontWeight: mode === 'register' ? 'bold' : 'normal',
+                fontSize: '14px'
+              }}
+            >
+              Crear cuenta
+            </button>
+          </div>
+
+          <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
+            {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
+          </h3>
+      
+      <div className="list" style={{gap:12}}>
+        {mode === 'register' && (
+          <>
+            <input 
+              placeholder="Nombre completo" 
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+            />
+            <input 
+              placeholder="Nick (nombre de usuario)" 
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+            />
+          </>
+        )}
+        <input 
+          placeholder="Email" 
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+        />
+        <input 
+          placeholder="Contrase├▒a" 
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister())}
+          style={{ background:'rgba(255,0,255,0.1)', border:'2px solid #ff00ff33', borderRadius:10, padding:12, color:'#fff', boxShadow:'0 0 10px #ff00ff22', outline:'none' }} 
+        />
+        
+        {message && (
+          <div style={{fontSize:14,textAlign:'center',marginTop:4,color:message.includes('Ô£à') ? '#39ff14' : '#ff4466'}}>
+            {message}
+          </div>
+        )}
+        
+        <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8}}>
+          <button 
+            className="btn btn1" 
+            onClick={mode === 'login' ? handleLogin : handleRegister}
+            disabled={loading}
+            style={{border:'2px solid #39ff14',color:'#39ff14',boxShadow:'0 0 10px #39ff1444',fontWeight:'bold',opacity:loading?0.5:1}}
+          >
+            {loading ? 'Cargando...' : (mode === 'login' ? 'Entrar' : 'Crear cuenta')}
+          </button>
+          <button 
+            className="btn" 
+            onClick={onClose}
+            disabled={loading}
+            style={{border:'2px solid #00ffff',color:'#00ffff',boxShadow:'0 0 10px #00ffff44',fontWeight:'bold',opacity:loading?0.5:1}}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+        </>
+    </div></div>
+  );
+}
+
+// ---------------- Selector de Niveles ----------------
+function LevelSelector({ onClose, currentLevel, onSelectLevel }) {
+  const worlds = [
+    { name: 'Mundo 1', color: '#39ff14', levels: [1,2,3,4,5,6,7,8,9,10] },
+    { name: 'Mundo 2', color: '#00ffff', levels: [11,12,13,14,15,16,17,18,19,20] },
+    { name: 'Mundo 3', color: '#ff6b9d', levels: [21,22,23,24,25,26,27,28,29,30] },
+    { name: 'Mundo 4', color: '#ffd700', levels: [31,32,33,34,35,36,37,38,39,40] },
+    { name: 'Mundo 5', color: '#ff00ff', levels: [41,42,43,44,45,46,47,48,49,50] }
+  ];
+
+  return (
+    <div className="modal">
+      <div className="card" style={{maxWidth:'90vw', width:'600px', maxHeight:'80vh', overflowY:'auto', padding:'20px'}}>
+        <button className="closer" onClick={onClose} aria-label="Cerrar">├ù</button>
+        <h3 style={{color:'var(--accent)', marginBottom:'12px', textAlign:'center'}}>Seleccionar Nivel</h3>
+        
+        <div style={{
+          marginBottom: '20px',
+          padding: '10px',
+          background: 'rgba(57,255,20,0.1)',
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#ffffffaa',
+          textAlign: 'center'
+        }}>
+          <strong style={{color: '#39ff14'}}>Modo Pr├íctica:</strong> Los niveles ya completados no suman puntos
+        </div>
+        
+        <div style={{display:'flex', flexDirection:'column', gap:'24px'}}>
+          {worlds.map((world, worldIdx) => (
+            <div key={worldIdx}>
+              <h4 style={{
+                color: world.color,
+                fontSize: '16px',
+                marginBottom: '12px',
+                textShadow: `0 0 10px ${world.color}`,
+                fontWeight: 'bold'
+              }}>
+                {world.name}
+              </h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                gap: '10px'
+              }}>
+                {world.levels.map(lvl => {
+                  const isUnlocked = lvl <= currentLevel;
+                  const isCurrent = lvl === currentLevel;
+                  const isCompleted = lvl < currentLevel;
+                  
+                  return (
+                    <button
+                      key={lvl}
+                      disabled={!isUnlocked}
+                      onClick={() => {
+                        onSelectLevel(lvl);
+                        onClose();
+                      }}
+                      style={{
+                        position: 'relative',
+                        background: isUnlocked 
+                          ? (isCurrent ? `linear-gradient(135deg, ${world.color}22, ${world.color}11)` : 'rgba(255,255,255,0.05)')
+                          : 'rgba(0,0,0,0.3)',
+                        border: isCurrent 
+                          ? `2px solid ${world.color}` 
+                          : (isUnlocked ? '2px solid rgba(255,255,255,0.2)' : '2px solid rgba(255,255,255,0.1)'),
+                        borderRadius: '12px',
+                        padding: '16px 8px',
+                        color: isUnlocked ? '#fff' : '#666',
+                        cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                        transition: 'all 0.2s ease',
+                        opacity: isUnlocked ? 1 : 0.4,
+                        boxShadow: isCurrent ? `0 0 15px ${world.color}44` : 'none',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        minHeight: '70px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (isUnlocked) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = `0 4px 12px ${world.color}44`;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (isUnlocked) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = isCurrent ? `0 0 15px ${world.color}44` : 'none';
+                        }
+                      }}
+                    >
+                      {!isUnlocked && (
+                        <span style={{fontSize: '20px', opacity: 0.5}}>­ƒöÆ</span>
+                      )}
+                      {isCompleted && (
+                        <span style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          fontSize: '12px',
+                          color: world.color
+                        }}>Ô£ô</span>
+                      )}
+                      <span style={{
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: isUnlocked ? world.color : '#666'
+                      }}>
+                        {lvl}
+                      </span>
+                      {isCurrent && (
+                        <span style={{
+                          fontSize: '10px',
+                          color: world.color,
+                          fontWeight: 'bold',
+                          marginTop: '2px'
+                        }}>
+                          ACTUAL
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- App ----------------
+export default function App(){
+  useLumetrixStyles();
+  const [screen, setScreen] = useState('intro');
+  const [showRanking, setShowRanking] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [musicOn, setMusicOn] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(0.15); // Volumen inicial m├ís alto
+  const [vibrateOn, setVibrateOn] = useState(true);
+  // ­ƒöÑ SISTEMA H├ìBRIDO OFFLINE/ONLINE - Almacenamiento local
+  const getLocalProgress = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        return {
+          nivel_actual: data.nivel_actual || 1,
+          total_time_s: data.total_time_s || 0,
+          total_puntos: data.total_puntos || 0,
+          last_sync: data.last_sync || null
+        };
+      }
+    } catch (e) {
+      console.log('Error leyendo progreso local:', e);
+    }
+    return { nivel_actual: 1, total_time_s: 0, total_puntos: 0, last_sync: null };
+  };
+
+  const saveLocalProgress = (nivel, tiempo, puntos) => {
+    try {
+      const data = {
+        nivel_actual: nivel,
+        total_time_s: tiempo,
+        total_puntos: puntos,
+        last_sync: new Date().toISOString(),
+        pending_sync: false
+      };
+      localStorage.setItem('lum_progress_offline', JSON.stringify(data));
+      console.log('Ô£à Progreso guardado localmente:', data);
+    } catch (e) {
+      console.log('ÔØî Error guardando progreso local:', e);
+    }
+  };
+
+  const markPendingSync = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        data.pending_sync = true;
+        localStorage.setItem('lum_progress_offline', JSON.stringify(data));
+        console.log('ÔÅ│ Progreso marcado como pendiente de sincronizaci├│n');
+      }
+    } catch (e) {
+      console.log('Error marcando pending_sync:', e);
+    }
+  };
+
+  const getPendingSyncStatus = () => {
+    try {
+      const saved = localStorage.getItem('lum_progress_offline');
+      if (saved) {
+        const data = JSON.parse(saved);
+        return data.pending_sync || false;
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // ­ƒöÑ Estados para el sistema h├¡brido
+  const [level, setLevel] = useState(() => getLocalProgress().nivel_actual);
+  const [totalTime, setTotalTime] = useState(() => getLocalProgress().total_time_s);
+  const [totalPuntos, setTotalPuntos] = useState(() => getLocalProgress().total_puntos);
+  const [showLevelSelector, setShowLevelSelector] = useState(false);
+  const [currentLevel, setCurrentLevel] = useState(() => getLocalProgress().nivel_actual);
+  const [practiceModeLevel, setPracticeModeLevel] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'pending' | 'offline' | 'syncing'
+  const [restartTrigger, setRestartTrigger] = useState(0); // Ô£à Trigger para forzar reinicio de nivel
+  
+  // ­ƒöÑ CARGAR PROGRESO LOCAL al iniciar
+  // ÔÜá´©Å COMENTADO: El progreso se carga desde el servidor en Intro (auto-login)
+  // Si se carga aqu├¡, sobrescribe los puntos del servidor con los puntos locales desactualizados
+  // useEffect(() => {
+  //   const localProgress = getLocalProgress();
+  //   setLevel(localProgress.nivel_actual);
+  //   setCurrentLevel(localProgress.nivel_actual);
+  //   setTotalTime(localProgress.total_time_s);
+  //   setTotalPuntos(localProgress.total_puntos);
+  //   console.log('­ƒô▒ Progreso local cargado:', localProgress);
+  // }, []);
+
+  useEffect(()=>{ 
+    window.LumetrixTest = Object.assign({}, window.LumetrixTest, { help:'LumetrixTest.start(), .tapExpected(), .state() ÔÇö tras pulsar Jugar' }); 
+    
+    // ­ƒöì DEBUG: Funci├│n para ver estado de auto-login
+    window.LUM_DEBUG = {
+      checkAuth: () => {
+        const email = localStorage.getItem('lum_user_email');
+        const token = localStorage.getItem('lum_user_token');
+        console.log('­ƒôè Estado de Autenticaci├│n:', {
+          email: email || 'ÔØî No guardado',
+          token: token ? 'Ô£à Guardado' : 'ÔØî No guardado',
+          password: token ? atob(token) : 'ÔØî No disponible'
+        });
+        return { email, token: token ? atob(token) : null };
+      },
+      clearAuth: () => {
+        localStorage.removeItem('lum_user_email');
+        localStorage.removeItem('lum_user_token');
+        console.log('Ô£à Credenciales eliminadas');
+      }
+    };
+  }, []);
+
+
+  // ­ƒöÑ SINCRONIZAR AL SERVIDOR (con manejo de errores)
+  const syncToServer = async (nivel, tiempo, puntos) => {
+    try {
+      if (!window.LUM_API || !window.currentUser) {
+        console.log('ÔÜá´©Å No hay sesi├│n activa, no se puede sincronizar');
+        markPendingSync();
+        setSyncStatus('pending');
+        return false;
+      }
+
+      setSyncStatus('syncing');
+      const result = await window.LUM_API.api('game.php?action=save_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          level: nivel,
+          total_time_s: tiempo,
+          puntos: puntos,
+          success: 1
+        })
+      });
+
+      if (result && result.success) {
+        console.log('Ô£à Progreso sincronizado al servidor');
+        setSyncStatus('synced');
+        
+        // Actualizar local con pending_sync = false
+        saveLocalProgress(nivel, tiempo, puntos);
+        return true;
+      } else {
+        console.log('ÔØî Error al sincronizar:', result?.message);
+        markPendingSync();
+        setSyncStatus('pending');
+        return false;
+      }
+    } catch (e) {
+      console.log('ÔØî Error de red al sincronizar:', e);
+      markPendingSync();
+      setSyncStatus('pending');
+      return false;
+    }
+  };
+
+  // Pausar/reanudar m├║sica cuando la app va a segundo plano
+  // El control de visibilidad de la m├║sica ahora est├í en el hook useSFX
+
+  // Funci├│n para iniciar un nivel espec├¡fico
+  const startLevel = (levelNum) => {
+    setLevel(levelNum);
+    // La funci├│n start se ejecutar├í autom├íticamente cuando cambie el level
+  };
+
+  return (
+    <div className="shell">
+      <div className="device">
+        {screen==='intro' ? (
+          <Intro 
+            onPlay={()=>setScreen('game')} 
+            onAuth={()=>setShowAuth(true)}
+            setLevel={setLevel}
+            setCurrentLevel={setCurrentLevel}
+            setTotalTime={setTotalTime}
+            setTotalPuntos={setTotalPuntos}
+          />
+        ) : (
+          <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
+                onOpenAuth={()=>setShowAuth(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
+                onOpenLevelSelector={()=>setShowLevelSelector(true)}
+                onTotalUpdate={setTotalTime} totalTime={totalTime} onPuntosUpdate={setTotalPuntos} totalPuntos={totalPuntos}
+                practiceModeLevel={practiceModeLevel} currentLevel={currentLevel}
+                onExitPracticeMode={()=>setPracticeModeLevel(null)}
+                onUpdateCurrentLevel={setCurrentLevel}
+                onLocalProgressSave={saveLocalProgress}
+                onSyncToServer={syncToServer}
+                syncStatus={syncStatus}
+                restartTrigger={restartTrigger} />
+        )}
+
+        {showRanking && <Ranking onClose={()=>setShowRanking(false)} total={totalTime} />}
+        {showLevelSelector && (
+          <LevelSelector 
+            onClose={()=>setShowLevelSelector(false)} 
+            currentLevel={currentLevel}
+            onSelectLevel={(lvl) => {
+              setPracticeModeLevel(lvl < currentLevel ? lvl : null);
+              setLevel(lvl);
+              setRestartTrigger(prev => prev + 1); // Ô£à Forzar reinicio del nivel inmediatamente
+            }}
+          />
+        )}
+        {showOptions && (
+          <Options onClose={()=>setShowOptions(false)} onOpenAuth={()=>{ setShowOptions(false); setShowAuth(true); }}
+                   level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} vibrateOn={vibrateOn} setSoundOn={setSoundOn} setMusicOn={setMusicOn} setVibrateOn={setVibrateOn}
+                   musicVolume={musicVolume} setMusicVolume={setMusicVolume}
+                   onResetTotal={()=>{ try{ localStorage.removeItem('lum_total'); }catch{}; setTotalTime(0); }} />
+        )}
+        {showAuth && <Auth onClose={()=>setShowAuth(false)} />}
+      </div>
+    </div>
+  );
+}

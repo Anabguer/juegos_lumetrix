@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+        }
+        .test {
+            background: rgba(255,0,255,0.1);
+            border: 2px solid #ff00ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 TEST SIMPLE LUMETRIX</h1>
+    
+    <div class="test">
+        <h2>✅ HTML funciona</h2>
+        <p>Si ves esto, el HTML se está cargando correctamente.</p>
+    </div>
+    
+    <div class="test">
+        <h2>🎨 CSS funciona</h2>
+        <p>Si ves colores y estilos, el CSS funciona.</p>
+    </div>
+    
+    <div class="test">
+        <h2 id="js-test">⏳ Probando JavaScript...</h2>
+        <p id="js-result"></p>
+    </div>
+    
+    <div class="test">
+        <h2>📦 Capacitor</h2>
+        <p id="capacitor-test">Verificando Capacitor...</p>
+    </div>
+    
+    <div class="test">
+        <h2>🔧 Game Bundle</h2>
+        <p id="bundle-test">Verificando game.bundle.js...</p>
+    </div>
+    
+    <script>
+        console.log('🟢 JavaScript básico funciona');
+        
+        // Test JavaScript
+        document.getElementById('js-test').textContent = '✅ JavaScript funciona';
+        document.getElementById('js-result').textContent = 'Timestamp: ' + new Date().toISOString();
+        
+        // Test Capacitor
+        setTimeout(() => {
+            if (typeof window.Capacitor !== 'undefined') {
+                document.getElementById('capacitor-test').innerHTML = 
+                    '✅ Capacitor detectado<br>Platform: ' + window.Capacitor.getPlatform();
+            } else {
+                document.getElementById('capacitor-test').textContent = 
+                    '❌ Capacitor NO detectado';
+            }
+        }, 100);
+        
+        // Test game bundle
+        setTimeout(() => {
+            if (typeof window.LumetrixGame !== 'undefined') {
+                document.getElementById('bundle-test').innerHTML = 
+                    '✅ game.bundle.js cargado correctamente<br>Funciones: ' + 
+                    Object.keys(window.LumetrixGame).join(', ');
+            } else {
+                document.getElementById('bundle-test').textContent = 
+                    '❌ game.bundle.js NO cargado o no exporta LumetrixGame';
+            }
+        }, 500);
+        
+        // Log todo al console
+        console.log('window.Capacitor:', window.Capacitor);
+        console.log('window.LumetrixGame:', window.LumetrixGame);
+    </script>
+    
+    <script src="js/game.bundle.js"></script>
+</body>
+</html>
+
+

@@ -524,9 +524,8 @@ function useLumetrixStyles(){
 }
 
 // ---------------- Intro ----------------
-function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTotalPuntos }){
+function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTotalPuntos, userInfo, setUserInfo }){
   const bgRef = useRef(null); const logoRef = useRef(null);
-  const [userInfo, setUserInfo] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
   
   // 🔐 VERIFICAR SESIÓN AL CARGAR (igual que MemoFlip)
@@ -702,13 +701,27 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
               <div className="actions" style={{marginBottom:8}}>
                 <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
               </div>
-              <button 
-                className="btn btn2" 
-                onClick={handleLogout} 
-                style={{fontSize:11,padding:'6px 12px',opacity:0.7}}
-              >
-                Salir
-              </button>
+              <div style={{display:'flex',gap:8,justifyContent:'center',flexDirection:'column'}}>
+                <button 
+                  className="btn btn2" 
+                  onClick={handleLogout} 
+                  style={{fontSize:11,padding:'6px 12px',opacity:0.7}}
+                >
+                  Salir
+                </button>
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    const userEmail = localStorage.getItem('lum_user_email') || 'tu_email@ejemplo.com';
+                    const subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
+                    const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
+                    window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+                  }}
+                  style={{fontSize:10,padding:'4px 8px',opacity:0.6,color:'#ff4466',border:'1px solid #ff4466'}}
+                >
+                  Eliminar cuenta
+                </button>
+              </div>
             </div>
           ) : (
             // Usuario NO logueado - opción invitado o entrar
@@ -734,7 +747,11 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
 }
 
 // ---------------- Game ----------------
-function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus, restartTrigger }){
+function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpenAuth, onOpenUserModal, onOpenRanking, onOpenOptions, onOpenLevelSelector, onTotalUpdate, totalTime: totalProp, onPuntosUpdate, totalPuntos: puntosProp, practiceModeLevel, currentLevel, onExitPracticeMode, onUpdateCurrentLevel, onLocalProgressSave, onSyncToServer, syncStatus, restartTrigger, userInfo }){
+  // 🔍 DEBUG: Verificar userInfo en Game
+  console.log('🔍 [GAME] userInfo recibido:', userInfo);
+  console.log('🔍 [GAME] userInfo existe?', !!userInfo);
+  console.log('🔍 [GAME] userInfo.nick:', userInfo?.nick);
   const boardRef = useRef(null);
   const [time, setTime] = useState(timeFor(level));
   const [running, setRunning] = useState(false);
@@ -2054,9 +2071,16 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             <img src={getAssetPath("lumetrix/img/ico_config.png")} alt="Configuración" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
             <span style={{display:'none',fontSize:'20px'}}>⚙️</span>
           </button>
-          <button className="icon" onClick={onOpenAuth} aria-label="Login">
-            <img src={getAssetPath("lumetrix/img/ico_user.png")} alt="Usuario" style={{width:'32px',height:'32px',objectFit:'contain'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
-            <span style={{display:'none',fontSize:'20px'}}>👤</span>
+          <button className="icon" onClick={userInfo ? () => {
+            // Si está logueado, mostrar modal de usuario
+            console.log('🔍 [GAME] Usuario logueado, abriendo UserModal');
+            onOpenUserModal();
+          } : () => {
+            console.log('🔍 [GAME] Usuario NO logueado, abriendo Auth modal');
+            onOpenAuth();
+          }} aria-label={userInfo ? "Usuario logueado" : "Login"}>
+            <img src={getAssetPath("lumetrix/img/ico_user.png")} alt={userInfo ? "Usuario logueado" : "Usuario"} style={{width:'32px',height:'32px',objectFit:'contain',filter: userInfo ? 'hue-rotate(120deg) brightness(1.2)' : 'none'}} onError={(e)=>{e.target.style.display='none';e.target.nextSibling.style.display='inline';}} />
+            <span style={{display:'none',fontSize:'20px',color: userInfo ? '#39ff14' : 'inherit'}}>👤</span>
           </button>
         </div>
       </div>
@@ -2393,7 +2417,61 @@ function Options({ onClose, onOpenAuth, level, setLevel, soundOn, musicOn, vibra
     </div></div>
   );
 }
-function Auth({ onClose }){
+// Modal para usuarios logueados
+function UserModal({ onClose, userInfo }) {
+  console.log('🔍 [USERMODAL] Renderizando UserModal con userInfo:', userInfo);
+  return (
+    <div className="modal">
+      <div className="card" style={{maxWidth:'420px',border:'2px solid #39ff14',boxShadow:'0 0 20px #39ff1444'}}>
+        <button className="closer" onClick={onClose} style={{border:'2px solid #39ff14',boxShadow:'0 0 10px #39ff14',background:'#000'}}>✕</button>
+        
+        <h3 style={{ color: '#39ff14', marginTop:0, marginBottom:12, textShadow:'0 0 10px #39ff14, 0 0 20px #39ff14', fontSize:'18px', textAlign:'center' }}>
+          👤 Mi Cuenta
+        </h3>
+        <div style={{textAlign:'center',color:'#ff00ff',fontSize:'16px',fontWeight:'bold',marginBottom:'10px'}}>
+          ⭐ ESTA ES LA MODAL DE USUARIO ⭐
+        </div>
+        
+        <div className="list" style={{gap:12}}>
+          <div style={{fontSize:14,textAlign:'center',color:'#ffffff99',lineHeight:'1.5',marginBottom:8}}>
+            <strong style={{color:'#39ff14'}}>¡Hola, {userInfo?.nick || 'Usuario'}!</strong><br/>
+            Email: {userInfo?.email || 'No disponible'}
+          </div>
+          
+          <div style={{display:'flex',gap:12,justifyContent:'center',marginTop:8,flexDirection:'column'}}>
+            <button 
+              className="btn btn1" 
+              onClick={() => {
+                // Cerrar sesión
+                localStorage.removeItem('lum_user_email');
+                localStorage.removeItem('lum_user_token');
+                window.location.reload();
+              }}
+              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold'}}
+            >
+              🚪 Cerrar sesión
+            </button>
+            
+            <button 
+              className="btn" 
+              onClick={() => {
+                const userEmail = localStorage.getItem('lum_user_email') || 'tu_email@ejemplo.com';
+                const subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
+                const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
+                window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+              }}
+              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold'}}
+            >
+              🗑️ Eliminar cuenta
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Auth({ onClose, userInfo }){
   // ✅ CARGAR CREDENCIALES GUARDADAS AL INICIAR
   const savedEmail = localStorage.getItem('lum_user_email') || '';
   const savedToken = localStorage.getItem('lum_user_token') || '';
@@ -2537,6 +2615,8 @@ function Auth({ onClose }){
         // ⭐ AUTO-LOGIN AUTOMÁTICO (estilo MemoFlip)
         setTimeout(async () => {
           try {
+            console.log('🔑 [AUTO-LOGIN] Intentando auto-login con:', { email: emailToVerify, password: registeredPassword ? '***' : 'VACÍA' });
+            
             const loginData = await window.LUM_API.api('auth.php?action=login', {
               method: 'POST',
               body: JSON.stringify({ 
@@ -2544,6 +2624,8 @@ function Auth({ onClose }){
                 password: registeredPassword 
               })
             });
+            
+            console.log('🔑 [AUTO-LOGIN] Respuesta del servidor:', loginData);
             
             if (loginData.success) {
               // Guardar credenciales para auto-login futuro
@@ -2554,6 +2636,7 @@ function Auth({ onClose }){
               // Recargar para aplicar cambios
               window.location.reload();
             } else {
+              console.log('❌ [AUTO-LOGIN] Falló:', loginData.message || 'Sin mensaje');
               setMessage('⚠️ Cuenta verificada. Por favor, inicia sesión manualmente');
               setTimeout(() => {
                 setMode('login');
@@ -2562,6 +2645,7 @@ function Auth({ onClose }){
               }, 2000);
             }
           } catch (e) {
+            console.log('❌ [AUTO-LOGIN] Error:', e);
             setMessage('⚠️ Cuenta verificada. Por favor, inicia sesión manualmente');
             setTimeout(() => {
               setMode('login');
@@ -2607,6 +2691,7 @@ function Auth({ onClose }){
     
     setLoading(false);
   };
+
 
   return (
     <div className="modal"><div className="card" style={{maxWidth:'420px',border:'2px solid #ff00ff',boxShadow:'0 0 20px #ff00ff44'}}>
@@ -2716,11 +2801,33 @@ function Auth({ onClose }){
             >
               Crear cuenta
             </button>
+            <button 
+              onClick={() => {
+                const userEmail = localStorage.getItem('lum_user_email') || 'tu_email@ejemplo.com';
+                const subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
+                const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
+                window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ff4466',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontWeight: 'normal',
+                fontSize: '14px'
+              }}
+            >
+              Eliminar cuenta
+            </button>
           </div>
 
           <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
             {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
           </h3>
+          <div style={{textAlign:'center',color:'#ff00ff',fontSize:'16px',fontWeight:'bold',marginBottom:'10px'}}>
+            ⭐ ESTA ES LA MODAL DE LOGIN/REGISTRO ⭐
+          </div>
       
           <div className="list" style={{gap:12}}>
             {mode === 'register' && (
@@ -2938,10 +3045,83 @@ export default function App(){
   const [showRanking, setShowRanking] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.15); // Volumen inicial más alto
   const [vibrateOn, setVibrateOn] = useState(true);
+  // ⭐ MOVER userInfo al componente principal para que esté disponible en todos los modales
+  const [userInfo, setUserInfo] = useState(null);
+  
+  // 🔧 FIX: Verificar userInfo desde localStorage al cargar
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('lum_user_email');
+    const savedToken = localStorage.getItem('lum_user_token');
+    
+    console.log('🔍 [APP] Verificando localStorage:');
+    console.log('🔍 [APP] savedEmail:', savedEmail);
+    console.log('🔍 [APP] savedToken:', savedToken ? 'EXISTS' : 'NULL');
+    
+    if (savedEmail && savedToken) {
+      // Si hay credenciales guardadas, establecer userInfo básico
+      const basicUserInfo = {
+        email: savedEmail,
+        nick: savedEmail.split('@')[0], // Usar parte del email como nick
+        user_key: savedEmail + '_lumetrix'
+      };
+      setUserInfo(basicUserInfo);
+      console.log('🔧 [APP] userInfo restaurado desde localStorage:', basicUserInfo);
+    } else {
+      console.log('❌ [APP] No hay credenciales guardadas en localStorage');
+    }
+  }, []);
+
+  // 🔧 FIX: Mantener userInfo cuando cambia de pantalla
+  useEffect(() => {
+    console.log('🔧 [APP] userInfo actual:', userInfo);
+    console.log('🔧 [APP] screen actual:', screen);
+  }, [userInfo, screen]);
+
+  // 🔧 FIX: Pausar sonido cuando se minimiza la app
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // App minimizada - pausar sonido
+        console.log('🔇 [APP] App minimizada - pausando sonido');
+        if (window.audioContext) {
+          window.audioContext.suspend();
+        }
+        // Pausar todos los elementos de audio
+        const audioElements = document.querySelectorAll('audio');
+        audioElements.forEach(audio => {
+          if (!audio.paused) {
+            audio.pause();
+            audio.dataset.wasPlaying = 'true';
+          }
+        });
+      } else {
+        // App restaurada - reanudar sonido si estaba sonando
+        console.log('🔊 [APP] App restaurada - reanudando sonido');
+        if (window.audioContext) {
+          window.audioContext.resume();
+        }
+        // Reanudar elementos de audio que estaban sonando
+        const audioElements = document.querySelectorAll('audio');
+        audioElements.forEach(audio => {
+          if (audio.dataset.wasPlaying === 'true') {
+            audio.play();
+            delete audio.dataset.wasPlaying;
+          }
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
   // 🔥 SISTEMA HÍBRIDO OFFLINE/ONLINE - Almacenamiento local
   const getLocalProgress = () => {
     try {
@@ -3110,10 +3290,12 @@ export default function App(){
             setCurrentLevel={setCurrentLevel}
             setTotalTime={setTotalTime}
             setTotalPuntos={setTotalPuntos}
+            userInfo={userInfo}
+            setUserInfo={setUserInfo}
           />
         ) : (
           <Game level={level} setLevel={setLevel} soundOn={soundOn} musicOn={musicOn} musicVolume={musicVolume} vibrateOn={vibrateOn}
-                onOpenAuth={()=>setShowAuth(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
+                onOpenAuth={()=>setShowAuth(true)} onOpenUserModal={()=>setShowUserModal(true)} onOpenRanking={()=>setShowRanking(true)} onOpenOptions={()=>setShowOptions(true)}
                 onOpenLevelSelector={()=>setShowLevelSelector(true)}
                 onTotalUpdate={setTotalTime} totalTime={totalTime} onPuntosUpdate={setTotalPuntos} totalPuntos={totalPuntos}
                 practiceModeLevel={practiceModeLevel} currentLevel={currentLevel}
@@ -3122,7 +3304,8 @@ export default function App(){
                 onLocalProgressSave={saveLocalProgress}
                 onSyncToServer={syncToServer}
                 syncStatus={syncStatus}
-                restartTrigger={restartTrigger} />
+                restartTrigger={restartTrigger}
+                userInfo={userInfo} />
         )}
 
         {showRanking && <Ranking onClose={()=>setShowRanking(false)} total={totalTime} />}
@@ -3143,7 +3326,8 @@ export default function App(){
                    musicVolume={musicVolume} setMusicVolume={setMusicVolume}
                    onResetTotal={()=>{ try{ localStorage.removeItem('lum_total'); }catch{}; setTotalTime(0); }} />
         )}
-        {showAuth && <Auth onClose={()=>setShowAuth(false)} />}
+        {showAuth && <Auth onClose={()=>setShowAuth(false)} userInfo={userInfo} />}
+        {showUserModal && <UserModal onClose={()=>setShowUserModal(false)} userInfo={userInfo} />}
       </div>
     </div>
   );

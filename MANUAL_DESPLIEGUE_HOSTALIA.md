@@ -1169,7 +1169,7 @@ Sube solo la carpeta del juego. Las rutas deben apuntar a `/sistema_apps_upload/
 
 ## 📋 **DESCRIPCIÓN**
 
-Sistema completo de verificación de cuentas por email con código de 6 dígitos que expira en 24 horas, implementado en Lumetrix basado en el sistema de MemoFlip.
+Sistema completo de verificación de cuentas por email con código de 6 dígitos que expira en **15 MINUTOS**, implementado en Lumetrix basado en el sistema de MemoFlip.
 
 ---
 
@@ -1306,71 +1306,95 @@ Las columnas ya existen en la tabla. Solo usar las existentes.
 
 ---
 
-## 🎨 **4. COMPONENTES REACT**
+## 🎨 **4. COMPONENTES REACT (Integrado en App.jsx)**
 
-### **Archivo:** `frontend/src/VerificationModal.jsx`
+### **Auth Component** integrado directamente en `frontend/src/App.jsx`
 
-**Modal de verificación** con:
-- Input de 6 dígitos numéricos
-- Botón "Verificar código"
-- Botón "Reenviar código"
-- Contador de expiración (24h)
-- Mensajes de error/éxito
+**Sistema completo de autenticación** con:
+- **3 modos**: `login`, `register`, `verify`
+- **Formulario de registro** con:
+  - Campo "Confirmar Contraseña" (debe coincidir con la contraseña)
+  - Validación de contraseña (mínimo 6 caracteres)
+  - NO recarga la página al registrarse
+  - Transición automática a modo `verify` tras registro
+- **Formulario de verificación** con:
+  - Input de 6 dígitos numéricos
+  - Botón "Verificar código"
+  - Botón "Reenviar código"
+  - Contador de expiración (15 minutos)
+  - **Auto-login automático** tras verificar el código exitosamente
+- **Formulario de login** con:
+  - Detección de cuentas no verificadas
+  - Transición a modo `verify` si se intenta login sin verificar
 
-**Props:**
+**Estados importantes:**
 ```javascript
-{
-  isOpen: boolean,
-  onClose: () => void,
-  email: string,
-  onVerificationSuccess: () => void
-}
+const [mode, setMode] = useState('login'); // 'login' | 'register' | 'verify'
+const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
+const [confirmPassword, setConfirmPassword] = useState(''); // NUEVO
+const [verificationCode, setVerificationCode] = useState('');
+const [registeredEmail, setRegisteredEmail] = useState(''); // Para auto-login
+const [registeredPassword, setRegisteredPassword] = useState(''); // Para auto-login
 ```
-
----
-
-### **Archivo:** `frontend/src/AuthModal.jsx` (NUEVO)
-
-**Modal de autenticación completo** con:
-- Tabs para Login/Registro
-- Formulario de registro con verificación
-- Formulario de login
-- Integración con VerificationModal
-- Manejo del flujo: Registro → Verificación → Login
 
 ---
 
 ## 🔄 **5. FLUJO COMPLETO**
 
-### **Registro:**
+### **Registro con Verificación (Flujo MemoFlip):**
 ```
 1. Usuario llena formulario de registro
+   - Email, Nombre, Username, Contraseña
+   - ⚠️ NUEVO: Confirmar Contraseña (debe coincidir)
+   - ⚠️ Validación: Contraseña mínimo 6 caracteres
    ↓
 2. Sistema genera código de 6 dígitos
    ↓
-3. Se guarda en BD (usuarios_aplicaciones)
+3. Se guarda en BD con expiry de 15 minutos
+   - verification_code: "123456"
+   - verification_expiry: NOW() + 15 minutes
+   - verified_at: NULL
+   - activo: 0
    ↓
 4. Se envía email con el código
    ↓
-5. Usuario introduce el código en la app
+5. ⚠️ NUEVO: NO se recarga la página
+   - Se guarda email y password para auto-login
+   - Se cambia a modo 'verify'
    ↓
-6. Sistema valida:
+6. Usuario introduce el código de 6 dígitos
+   ↓
+7. Sistema valida:
    - Código correcto ✅
-   - No expirado (< 24h) ✅
+   - No expirado (< 15 min) ✅
    ↓
-7. Cuenta activada → Puede hacer login
+8. Cuenta activada:
+   - activo = 1
+   - verified_at = NOW()
+   - verification_code = NULL
+   ↓
+9. ⚠️ NUEVO: Auto-login automático
+   - Usa email y password guardados
+   - Si falla, muestra botón de login manual
 ```
 
 ### **Login:**
 ```
-1. Usuario introduce email + password
+1. Usuario introduce email/username + password
    ↓
-2. Sistema verifica:
-   - Credenciales correctas ✅
-   - Email verificado ✅
+2. Sistema busca usuario (SIN filtrar por activo)
    ↓
-3. Si email NO verificado → Error
-4. Si todo OK → Login exitoso
+3. Sistema verifica contraseña
+   ↓
+4. ⚠️ NUEVO: Si verified_at es NULL:
+   - Retorna error con requires_verification: true
+   - Frontend cambia a modo 'verify'
+   - Usuario puede meter código o reenviar
+   ↓
+5. Si verified_at NO es NULL:
+   - Verifica que activo = 1
+   - Login exitoso ✅
 ```
 
 ---
@@ -1440,10 +1464,9 @@ Las columnas ya existen en la tabla. Solo usar las existentes.
 
 ### **Cambiar tiempo de expiración:**
 ```php
-// En enviar_email.php, línea ~67
-function codigoEsValido($tiempo_verificacion, $horas_validez = 24) {
-    // Cambiar 24 por el número de horas deseado
-}
+// En auth.php, durante el registro/resend
+$verification_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+// Cambiar '+15 minutes' por '+30 minutes', '+1 hour', etc.
 ```
 
 ### **Cambiar longitud del código:**
@@ -1701,6 +1724,377 @@ if (finalLevel > serverLevel || finalTime > serverTime || finalPuntos > serverPu
 - [ ] 🧪 Probar escenario offline → online
 - [ ] 🧪 Verificar que progreso se mantiene
 - [ ] 🧪 Verificar que se sincroniza al servidor
+
+---
+
+---
+
+## 🚨 Troubleshooting Universal
+
+### Problemas Comunes y Soluciones:
+
+#### **404 en Assets:**
+```bash
+# Verificar rutas
+curl -I https://colisan.com/sistema_apps_upload/mi-juego/css/styles.css
+# Debe devolver 200 OK, no 404
+```
+**Solución:** Verificar `<base href="/sistema_apps_upload/<juego>/">` en HTML
+
+#### **APK Pantalla Blanca:**
+```bash
+# Verificar que game.bundle.js existe en servidor
+curl -I https://colisan.com/sistema_apps_upload/mi-juego/js/game.bundle.js
+```
+**Solución:** 
+1. `npm run build`
+2. Copiar `dist/game.bundle.js` a `PARA_HOSTALIA/sistema_apps_upload/mi-juego/js/`
+3. Ejecutar BAT de deploy
+
+#### **Emails No Llegan:**
+```php
+// Probar SMTP con diagnostico_completo.php
+// Verificar config_smtp.php
+```
+**Solución:** Usar puerto 25 sin TLS para Hostalia
+
+#### **Auto-Login Falla:**
+```javascript
+// Verificar localStorage
+console.log(localStorage.getItem('mi-juego_user_email'));
+console.log(localStorage.getItem('mi-juego_user_token'));
+```
+**Solución:** Verificar que `usuario_aplicacion_key` coincida en frontend y backend
+
+#### **Publicidad No Carga:**
+```typescript
+// Verificar IDs de AdMob
+console.log('[AdMob] App ID:', APP_ID);
+console.log('[AdMob] Banner ID:', BANNER_ID);
+```
+**Solución:** Configurar IDs reales de AdMob Console
+
+---
+
+## ⚙️ Configuración por Entorno
+
+### Variables de Entorno (.env.example):
+```env
+# Configuración del Juego
+JUEGO_NOMBRE=mi-juego-nuevo
+JUEGO_TITULO=Mi Juego Nuevo
+JUEGO_DESCRIPCION=Descripción del juego
+
+# Base de Datos
+DB_HOST=localhost
+DB_NAME=sistema_apps
+DB_USER=sistema_apps_user
+
+# SMTP
+SMTP_HOST=smtp.colisan.com
+SMTP_PORT=25
+SMTP_USER=info@colisan.com
+SMTP_PASS=IgdAmg19521954
+SMTP_FROM=info@intocables.com
+
+# AdMob
+ADMOB_APP_ID=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+ADMOB_BANNER_ID=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+ADMOB_INTERSTITIAL_ID=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+ADMOB_REWARDED_ID=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+
+# Android
+ANDROID_APP_ID=com.tudominio.mijuego
+ANDROID_VERSION_CODE=1
+ANDROID_VERSION_NAME=1.0.0
+```
+
+### Uso en Código:
+```javascript
+// En JavaScript
+const JUEGO = process.env.JUEGO_NOMBRE || 'mi-juego-nuevo';
+const JUEGO_TITULO = process.env.JUEGO_TITULO || 'Mi Juego Nuevo';
+```
+
+```php
+// En PHP
+$juego = $_ENV['JUEGO_NOMBRE'] ?? 'mi-juego-nuevo';
+$juego_titulo = $_ENV['JUEGO_TITULO'] ?? 'Mi Juego Nuevo';
+```
+
+---
+
+## 🤖 Setup Automático
+
+### `setup_nuevo_juego.bat`:
+```batch
+@echo off
+setlocal enabledelayedexpansion
+
+echo 🎮 SETUP AUTOMÁTICO DE NUEVO JUEGO
+echo ====================================
+
+set /p JUEGO_NOMBRE="Nombre del juego (sin espacios, ej: mi-juego-nuevo): "
+set /p JUEGO_TITULO="Título del juego (ej: Mi Juego Nuevo): "
+set /p JUEGO_DESCRIPCION="Descripción del juego: "
+
+echo.
+echo 🔄 Configurando %JUEGO_NOMBRE%...
+
+REM Crear estructura de carpetas
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\css" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\js" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\api" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\assets" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\assets\img" 2>nul
+mkdir "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\assets\audio" 2>nul
+
+REM Crear archivos template
+echo ^<!DOCTYPE html^> > "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^<html^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^<head^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<meta charset="UTF-8"^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<title^>%JUEGO_TITULO%^</title^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<base href="/sistema_apps_upload/%JUEGO_NOMBRE%/"^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<link rel="stylesheet" href="css/styles.css"^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^</head^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^<body^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<h1^>%JUEGO_TITULO%^</h1^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<p^>%JUEGO_DESCRIPCION%^</p^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo     ^<script src="js/app.js"^>^</script^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^</body^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+echo ^</html^> >> "PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\index.html"
+
+REM Crear BAT de deploy personalizado
+echo @echo off > "deploy_%JUEGO_NOMBRE%.bat"
+echo setlocal >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "HOST=82.194.68.83" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "USER=sistema_apps_user" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "PASS=GestionUploadSistemaApps!" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "WINSCP=C:\Users\agl03\AppData\Local\Programs\WinSCP\WinSCP.com" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "JUEGO=%JUEGO_NOMBRE%" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "LOCAL=%%~dp0PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo set "REMOTE=/sistema_apps_upload/%JUEGO_NOMBRE%" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo. >> "deploy_%JUEGO_NOMBRE%.bat"
+echo echo 🚀 Subiendo %JUEGO_NOMBRE% a Hostalia... >> "deploy_%JUEGO_NOMBRE%.bat"
+echo echo 📁 Local: %%LOCAL%% >> "deploy_%JUEGO_NOMBRE%.bat"
+echo echo 📁 Remote: %%REMOTE%% >> "deploy_%JUEGO_NOMBRE%.bat"
+echo. >> "deploy_%JUEGO_NOMBRE%.bat"
+echo "%%WINSCP%%" /ini=nul /log:"%%LOCAL%%\deploy_%JUEGO_NOMBRE%.log" /command ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "open ftps://%%USER%%:%%PASS%%@%%HOST%%/ -explicit -certificate=*" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "option batch on" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "option confirm off" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "lcd %%LOCAL%%" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "cd /sistema_apps_upload" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "mkdir %JUEGO_NOMBRE%" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "cd %JUEGO_NOMBRE%" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "synchronize remote -mirror -criteria=size" ^ >> "deploy_%JUEGO_NOMBRE%.bat"
+echo  "exit" >> "deploy_%JUEGO_NOMBRE%.bat"
+echo. >> "deploy_%JUEGO_NOMBRE%.bat"
+echo echo ✅ Deploy completado >> "deploy_%JUEGO_NOMBRE%.bat"
+echo pause >> "deploy_%JUEGO_NOMBRE%.bat"
+
+echo.
+echo ✅ Setup completado para %JUEGO_NOMBRE%
+echo.
+echo 📁 Archivos creados:
+echo    - PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\
+echo    - deploy_%JUEGO_NOMBRE%.bat
+echo.
+echo 🚀 Próximos pasos:
+echo    1. Añadir tu código a PARA_HOSTALIA\sistema_apps_upload\%JUEGO_NOMBRE%\
+echo    2. Ejecutar deploy_%JUEGO_NOMBRE%.bat
+echo    3. Configurar base de datos con admin_db.php
+echo.
+pause
+```
+
+---
+
+## ⚡ Optimización Universal
+
+### Frontend:
+```javascript
+// Lazy loading de imágenes
+const lazyImages = document.querySelectorAll('img[data-src]');
+const imageObserver = new IntersectionObserver((entries, observer) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const img = entry.target;
+      img.src = img.dataset.src;
+      img.classList.remove('lazy');
+      imageObserver.unobserve(img);
+    }
+  });
+});
+lazyImages.forEach(img => imageObserver.observe(img));
+```
+
+```javascript
+// Service Worker para cache
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(registration => {
+    console.log('SW registrado:', registration);
+  });
+}
+```
+
+### Backend:
+```php
+// Cache de consultas frecuentes
+function getCachedData($key, $callback, $ttl = 300) {
+    $cache_file = "cache/{$key}.json";
+    
+    if (file_exists($cache_file) && (time() - filemtime($cache_file)) < $ttl) {
+        return json_decode(file_get_contents($cache_file), true);
+    }
+    
+    $data = $callback();
+    file_put_contents($cache_file, json_encode($data));
+    return $data;
+}
+```
+
+```sql
+-- Índices para optimizar consultas
+CREATE INDEX idx_usuario_key ON usuarios_aplicaciones(usuario_aplicacion_key);
+CREATE INDEX idx_app_codigo ON usuarios_aplicaciones(app_codigo);
+CREATE INDEX idx_activo ON usuarios_aplicaciones(activo);
+CREATE INDEX idx_verified_at ON usuarios_aplicaciones(verified_at);
+```
+
+---
+
+## 🧪 Testing Automatizado
+
+### `test_juego_completo.php`:
+```php
+<?php
+require_once 'config_hostalia.php';
+
+echo "🧪 TESTING COMPLETO DEL JUEGO\n";
+echo "============================\n\n";
+
+$juego = 'mi-juego-nuevo'; // ← CAMBIAR POR EL NOMBRE REAL
+$tests_passed = 0;
+$tests_total = 0;
+
+function test($name, $condition, $message = '') {
+    global $tests_passed, $tests_total;
+    $tests_total++;
+    
+    if ($condition) {
+        echo "✅ $name\n";
+        $tests_passed++;
+    } else {
+        echo "❌ $name - $message\n";
+    }
+}
+
+// Test 1: Base de datos
+echo "📊 TESTING BASE DE DATOS:\n";
+test("Conexión a BD", $conn !== null, "No se pudo conectar a la base de datos");
+
+$result = $conn->query("SHOW TABLES LIKE '{$juego}_progreso'");
+test("Tabla {$juego}_progreso existe", $result->num_rows > 0, "Tabla no encontrada");
+
+$result = $conn->query("SELECT * FROM aplicaciones WHERE app_codigo = '$juego'");
+test("Aplicación registrada", $result->num_rows > 0, "Aplicación no encontrada en BD");
+
+// Test 2: Endpoints
+echo "\n🔌 TESTING ENDPOINTS:\n";
+test("auth.php existe", file_exists("api/auth.php"), "Archivo auth.php no encontrado");
+test("game.php existe", file_exists("api/game.php"), "Archivo game.php no encontrado");
+
+// Test 3: Archivos críticos
+echo "\n📁 TESTING ARCHIVOS:\n";
+test("index.html existe", file_exists("index.html"), "Archivo index.html no encontrado");
+test("game.bundle.js existe", file_exists("js/game.bundle.js"), "Archivo game.bundle.js no encontrado");
+
+// Test 4: Configuración
+echo "\n⚙️ TESTING CONFIGURACIÓN:\n";
+test("config_smtp.php existe", file_exists("config_smtp.php"), "Archivo config_smtp.php no encontrado");
+test("config_hostalia.php existe", file_exists("config_hostalia.php"), "Archivo config_hostalia.php no encontrado");
+
+// Test 5: Permisos
+echo "\n🔐 TESTING PERMISOS:\n";
+test("Carpeta js escribible", is_writable("js/"), "Carpeta js no tiene permisos de escritura");
+test("Carpeta api escribible", is_writable("api/"), "Carpeta api no tiene permisos de escritura");
+
+// Resultado final
+echo "\n📊 RESULTADO FINAL:\n";
+echo "Tests pasados: $tests_passed/$tests_total\n";
+
+if ($tests_passed === $tests_total) {
+    echo "🎉 ¡TODOS LOS TESTS PASARON! El juego está listo.\n";
+} else {
+    echo "⚠️ Algunos tests fallaron. Revisar errores arriba.\n";
+}
+
+echo "\n";
+?>
+```
+
+### `test_frontend.html`:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🧪 Test Frontend - Mi Juego</title>
+    <base href="/sistema_apps_upload/mi-juego-nuevo/">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Testing Frontend</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        let testsPassed = 0;
+        let testsTotal = 0;
+        
+        function test(name, condition, message = '') {
+            testsTotal++;
+            const div = document.createElement('div');
+            div.className = `test ${condition ? 'pass' : 'fail'}`;
+            div.innerHTML = `${condition ? '✅' : '❌'} ${name} ${message}`;
+            results.appendChild(div);
+            
+            if (condition) testsPassed++;
+        }
+        
+        // Test 1: Assets
+        test("CSS carga", document.querySelector('link[href*="css"]') !== null);
+        test("JS carga", document.querySelector('script[src*="js"]') !== null);
+        
+        // Test 2: API
+        fetch('api/auth.php?action=test')
+            .then(response => test("API responde", response.ok, `Status: ${response.status}`))
+            .catch(() => test("API responde", false, "Error de conexión"));
+        
+        // Test 3: LocalStorage
+        test("LocalStorage disponible", typeof(Storage) !== "undefined");
+        
+        // Test 4: Capacitor
+        test("Capacitor disponible", window.Capacitor !== undefined, "Solo en APK");
+        
+        // Resultado final
+        setTimeout(() => {
+            const div = document.createElement('div');
+            div.className = 'test';
+            div.innerHTML = `<strong>📊 Resultado: ${testsPassed}/${testsTotal} tests pasaron</strong>`;
+            results.appendChild(div);
+        }, 1000);
+    </script>
+</body>
+</html>
+```
 
 ---
 
