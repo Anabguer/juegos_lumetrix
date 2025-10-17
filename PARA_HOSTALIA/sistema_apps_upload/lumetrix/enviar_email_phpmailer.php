@@ -6,14 +6,10 @@
 
 require_once __DIR__.'/config_hostalia.php';
 
-// Incluir PHPMailer (si no está disponible, usar mail() nativo como fallback)
-$use_phpmailer = false;
-if (file_exists(__DIR__.'/PHPMailer/PHPMailer.php')) {
-    require_once __DIR__.'/PHPMailer/PHPMailer.php';
-    require_once __DIR__.'/PHPMailer/SMTP.php';
-    require_once __DIR__.'/PHPMailer/Exception.php';
-    $use_phpmailer = true;
-}
+// Incluir PHPMailer (OBLIGATORIO - no hay fallback)
+require_once __DIR__.'/PHPMailer/PHPMailer.php';
+require_once __DIR__.'/PHPMailer/SMTP.php';
+require_once __DIR__.'/PHPMailer/Exception.php';
 
 /**
  * Genera código de verificación de 6 dígitos
@@ -44,51 +40,42 @@ function codigoEsValido($verification_expiry, $horas_validez = 24) {
  * Envía email de verificación con PHPMailer o mail() nativo
  */
 function enviarEmailVerificacion($email, $nombre, $codigo) {
-    global $use_phpmailer;
-    
     $asunto = "🎮 Lumetrix - Código de Verificación";
     
     // Template HTML del email
     $html = generarTemplateEmail($nombre, $codigo, 'verificacion');
     
-    if ($use_phpmailer) {
-        return enviarConPHPMailer($email, $asunto, $html);
-    } else {
-        return enviarConMailNativo($email, $asunto, $html);
-    }
+    // SOLO PHPMailer - más rápido y confiable
+    return enviarConPHPMailer($email, $asunto, $html);
 }
 
 /**
  * Envía email de recuperación de contraseña
  */
 function enviarEmailRecuperacion($email, $nombre, $codigo) {
-    global $use_phpmailer;
-    
     $asunto = "🔐 Lumetrix - Recuperar Contraseña";
     
     // Template HTML del email
     $html = generarTemplateEmail($nombre, $codigo, 'recuperacion');
     
-    if ($use_phpmailer) {
-        return enviarConPHPMailer($email, $asunto, $html);
-    } else {
-        return enviarConMailNativo($email, $asunto, $html);
-    }
+    // SOLO PHPMailer - más rápido y confiable
+    return enviarConPHPMailer($email, $asunto, $html);
 }
 
 /**
- * Envía email usando PHPMailer con SMTP
+ * Envía email usando PHPMailer optimizado para Hostalia
  */
 function enviarConPHPMailer($email, $asunto, $html) {
     try {
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        $mail = new PHPMailer\PHPMailer\PHPMailer();
         
-        // Configuración SMTP para Hostalia
+        // Configuración optimizada para Hostalia
         $mail->isSMTP();
-        $mail->Host = 'mail.colisan.com';
-        $mail->SMTPAuth = false; // Hostalia no requiere autenticación SMTP
-        $mail->Port = 25; // Puerto 25 sin TLS
+        $mail->Host = 'localhost'; // Usar localhost para mayor velocidad
+        $mail->SMTPAuth = false; // Sin autenticación
+        $mail->Port = 25; // Puerto 25 directo
         $mail->CharSet = 'UTF-8';
+        $mail->SMTPDebug = 0; // Sin debug para mayor velocidad
         
         // Remitente
         $mail->setFrom('noreply@colisan.com', 'Lumetrix');
@@ -100,29 +87,23 @@ function enviarConPHPMailer($email, $asunto, $html) {
         $mail->Body = $html;
         $mail->AltBody = strip_tags($html);
         
-        $mail->send();
-        return true;
+        $result = $mail->send();
+        
+        if ($result) {
+            error_log("✅ Email enviado exitosamente a: $email");
+            return true;
+        } else {
+            error_log("❌ Error enviando email a: $email - " . $mail->ErrorInfo);
+            return false;
+        }
         
     } catch (Exception $e) {
-        error_log("Error PHPMailer: " . $e->getMessage());
+        error_log("❌ Error PHPMailer: " . $e->getMessage());
         return false;
     }
 }
 
-/**
- * Envía email usando mail() nativo (fallback)
- */
-function enviarConMailNativo($email, $asunto, $html) {
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=UTF-8',
-        'From: Lumetrix <noreply@colisan.com>',
-        'Reply-To: noreply@colisan.com',
-        'X-Mailer: PHP/' . phpversion()
-    ];
-    
-    return mail($email, $asunto, $html, implode("\r\n", $headers));
-}
+// Función mail() nativo eliminada - solo usamos PHPMailer para mayor velocidad
 
 /**
  * Genera template HTML para emails
@@ -202,7 +183,7 @@ function probarSistemaEmail($email_test) {
     return [
         'enviado' => $resultado,
         'codigo' => $codigo,
-        'metodo' => file_exists(__DIR__.'/PHPMailer/PHPMailer.php') ? 'PHPMailer' : 'mail() nativo'
+        'metodo' => 'PHPMailer Optimizado'
     ];
 }
 
