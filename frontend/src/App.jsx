@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { pauseAllAudio, resumeAllAudio, startBg, stopBg } from './audio.js';
 import './audio-guard.js'; // Cargar kill-switch muy pronto
+import AuthModalCompleto from './components/AuthModalCompleto';
 
 /**
  * LUMETRIX – React (build-safe, JS only)
@@ -446,6 +447,7 @@ function useLumetrixStyles(){
 function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTotalPuntos, userInfo, setUserInfo }){
   const bgRef = useRef(null); const logoRef = useRef(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   
   // 🔐 VERIFICAR SESIÓN AL CARGAR (igual que MemoFlip)
   const hasCheckedRef = useRef(false);
@@ -461,7 +463,23 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
   const checkSession = async () => {
     try {
       console.log('🔍 [INTRO] Verificando sesión...');
-      const data = await window.LUM_API.api('auth.php?action=check_session');
+      
+      // Usar CapacitorHttp si está disponible (APK), fetch si no (web)
+      let data;
+      if (window.Capacitor && window.CapacitorHttp) {
+        const { CapacitorHttp } = window.Capacitor.Plugins;
+        const response = await CapacitorHttp.request({
+          url: 'https://colisan.com/sistema_apps_upload/lumetrix/auth_completo.php?action=check_session',
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        data = response.data;
+      } else {
+        const response = await fetch('auth_completo.php?action=check_session');
+        data = await response.json();
+      }
       
       if (data && data.success) {
         console.log('✅ [INTRO] Sesión activa:', data.user?.nick);
@@ -491,11 +509,28 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
           console.log('🔑 [INTRO] Credenciales encontradas, auto-login...');
           try {
             const savedPassword = atob(savedToken);
-            const loginResult = await fetch('https://colisan.com/sistema_apps_upload/lumetrix/auth.php?action=login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username: savedEmail, password: savedPassword })
-            }).then(r => r.json());
+            
+            // Usar CapacitorHttp si está disponible (APK), fetch si no (web)
+            let loginResult;
+            if (window.Capacitor && window.CapacitorHttp) {
+              const { CapacitorHttp } = window.Capacitor.Plugins;
+              const response = await CapacitorHttp.request({
+                url: 'https://colisan.com/sistema_apps_upload/lumetrix/auth_completo.php?action=login',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                data: { username: savedEmail, password: savedPassword }
+              });
+              loginResult = response.data;
+            } else {
+              const response = await fetch('auth_completo.php?action=login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: savedEmail, password: savedPassword })
+              });
+              loginResult = await response.json();
+            }
             
             if (loginResult && loginResult.success) {
               console.log('✅ [INTRO] Auto-login exitoso!');
@@ -533,7 +568,23 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
   
   const handleLogout = async () => {
     try {
-      await window.LUM_API.api('auth.php?action=logout');
+      // Usar CapacitorHttp si está disponible (APK), fetch si no (web)
+      if (window.Capacitor && window.CapacitorHttp) {
+        const { CapacitorHttp } = window.Capacitor.Plugins;
+        await CapacitorHttp.request({
+          url: 'https://colisan.com/sistema_apps_upload/lumetrix/auth_completo.php?action=logout',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+      } else {
+        await fetch('auth_completo.php?action=logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
       localStorage.removeItem('lum_user_email');
       localStorage.removeItem('lum_user_token');
       console.log('🔓 [INTRO] Sesión cerrada');
@@ -541,6 +592,20 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
     } catch (e) {
       console.log('❌ [INTRO] Error al cerrar sesión');
     }
+  };
+
+  const handleAuthSuccess = (user) => {
+    setUserInfo(user);
+    setShowAuthModal(false);
+    
+    // Guardar credenciales para auto-login futuro
+    localStorage.setItem('lum_user_email', user.email);
+    localStorage.setItem('lum_user_token', btoa('password_temp')); // Se actualizará con la contraseña real
+    
+    // ✅ FIX: Guardar sesión en window.currentUser para que sincronización funcione
+    window.currentUser = user;
+    
+    console.log('✅ [INTRO] Login exitoso:', user.nick);
   };
   
   useEffect(()=>{ 
@@ -640,7 +705,7 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
               <div style={{fontSize:12,opacity:0.5,marginBottom:6}}>¿Ya tienes cuenta?</div>
               <button 
                 className="btn btn2" 
-                onClick={onAuth}
+                onClick={() => setShowAuthModal(true)}
                 style={{fontSize:12,padding:'6px 14px'}}
               >
                 Entrar
@@ -650,6 +715,13 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
         </div>
         <div className="copy" style={{fontSize:'14px',fontWeight:500}}>© @intocables13 · Todos los derechos reservados</div>
       </div>
+      
+      {/* Modal de autenticación completo */}
+      <AuthModalCompleto 
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLoginSuccess={handleAuthSuccess}
+      />
     </section>
   );
 }
