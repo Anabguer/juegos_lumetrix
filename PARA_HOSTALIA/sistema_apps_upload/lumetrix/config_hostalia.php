@@ -52,5 +52,5 @@ function uakey(): ?string { return $_SESSION['uakey'] ?? null; }
 
 /** Generación de clave */
 function key_from_email(string $email): string {
-  return strtolower(trim($email)) . '#' . APP_CODIGO;
+  return strtolower(trim($email)) . '_' . APP_CODIGO;
 }

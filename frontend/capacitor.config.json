@@ -1,24 +1,13 @@
 {
   "appId": "com.colisan.lumetrix",
   "appName": "Lumetrix",
-  "webDir": "../PARA_HOSTALIA/sistema_apps_upload/lumetrix",
+  "webDir": "dist",
   "server": {
-    "androidScheme": "https",
-    "allowNavigation": [
-      "https://colisan.com/*",
-      "https://82.194.68.83/*",
-      "http://82.194.68.83/*"
-    ]
+    "androidScheme": "https"
   },
   "plugins": {
-    "LiveUpdates": {
-      "appId": "com.colisan.lumetrix",
-      "channel": "production",
-      "autoUpdateMethod": "background",
-      "maxVersions": 2
-    },
-    "Network": {
-      "description": "Detectar estado de conexión"
+    "CapacitorHttp": {
+      "enabled": true
     }
   }
 }

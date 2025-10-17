@@ -12,7 +12,7 @@ if ($act === 'register') {
   if (!$nombre || !$nick || !$email || !$pass) json_out(['success'=>false,'message'=>'faltan campos']);
 
   $pdo = db();
-  $uakey = uakey_from_email($email, 'lumetrix');
+  $uakey = key_from_email($email);
 
   // ya existe para esta app (por key o por nick+app)
   $st = $pdo->prepare('SELECT usuario_aplicacion_id FROM usuarios_aplicaciones WHERE (usuario_aplicacion_key=? OR (nick=? AND app_codigo=?)) LIMIT 1');
@@ -63,7 +63,7 @@ if ($act === 'login') {
 
   // Buscar usuario SIN filtrar por activo (para poder detectar cuentas no verificadas)
   if (strpos($user, '@') !== false) {
-    $uakey = uakey_from_email($user, 'lumetrix');
+    $uakey = key_from_email($user);
     $st = $pdo->prepare('SELECT nick, email, password_hash, fecha_registro, verified_at, activo FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');
     $st->execute([$uakey, 'lumetrix']);
   } else {
@@ -140,7 +140,7 @@ if ($act === 'verify_code') {
   if (!$email || !$codigo) json_out(['success'=>false,'error'=>'Faltan datos requeridos']);
   
   $pdo = db();
-  $uakey = uakey_from_email($email, 'lumetrix');
+  $uakey = key_from_email($email);
   
   $st = $pdo->prepare('SELECT verification_code, verification_expiry FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND verified_at IS NULL');
   $st->execute([$uakey, 'lumetrix']);
@@ -176,7 +176,7 @@ if ($act === 'resend_code') {
   if (!$email) json_out(['success'=>false,'error'=>'Email requerido']);
   
   $pdo = db();
-  $uakey = uakey_from_email($email, 'lumetrix');
+  $uakey = key_from_email($email);
   
   $st = $pdo->prepare('SELECT nombre FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? AND verified_at IS NULL');
   $st->execute([$uakey, 'lumetrix']);
@@ -213,7 +213,7 @@ if ($act === 'request_delete') {
   }
   
   $pdo = db();
-  $uakey = uakey_from_email($email, 'lumetrix');
+  $uakey = key_from_email($email);
   
   // Verificar que el usuario existe
   $st = $pdo->prepare('SELECT usuario_aplicacion_id, nombre, nick FROM usuarios_aplicaciones WHERE usuario_aplicacion_key=? AND app_codigo=? LIMIT 1');

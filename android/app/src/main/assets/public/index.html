@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Lumetrix</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a2e !important;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #gameRoot {
+            width: 100%;
+            height: 100%;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h2>🎮 LUMETRIX</h2>
+        <p>Cargando juego...</p>
+    </div>
+    
+    <div id="gameRoot"></div>
+    
+    <script>
+        console.log('🔥 [LUMETRIX] HTML cargado correctamente');
+        
+        // Ocultar loading cuando se cargue el juego
+        setTimeout(() => {
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'none';
+            }
+        }, 3000);
+    </script>
+    
+    <script src="js/game.bundle.js"></script>
+    
+    <script>
+        console.log('🔥 [LUMETRIX] JavaScript cargado');
+        
+        // Verificar que el juego se montó
+        setTimeout(() => {
+            if (typeof window.LumetrixGame !== 'undefined') {
+                console.log('✅ [LUMETRIX] LumetrixGame encontrado');
+            } else {
+                console.log('❌ [LUMETRIX] LumetrixGame NO encontrado');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

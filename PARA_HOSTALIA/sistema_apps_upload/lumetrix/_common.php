@@ -14,7 +14,7 @@ require_once __DIR__.'/config_hostalia.php';
 
 /**
  * Genera la clave canónica usuario_aplicacion_key
- * REGLA: email + '_' + app (sin modificar @ ni .)
+ * REGLA: email + '#' + app (sin modificar @ ni .)
  * 
  * @param string $email Email del usuario (será normalizado a lowercase)
  * @param string $app Código de la aplicación (default: 'lumetrix')

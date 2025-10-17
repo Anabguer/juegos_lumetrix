@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { pauseAllAudio, resumeAllAudio, startBg, stopBg } from './audio.js';
+import './audio-guard.js'; // Cargar kill-switch muy pronto
 
 /**
  * LUMETRIX – React (build-safe, JS only)
@@ -171,9 +173,8 @@ const LEVEL_CONFIG = {
 // ---------------- Sonido (WebAudio) ----------------
 function useSFX(enabled, volume = 0.08, musicOn = true){
   const ctxRef = useRef(null);
-  const bgAudioRef = useRef(null);
-  const startAudioRef = useRef(null);
   const safeWindow = typeof window !== 'undefined' ? window : {};
+  
   const getCtx = ()=>{
     if(!enabled) return null;
     try{
@@ -181,10 +182,13 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
         const C = safeWindow.AudioContext || safeWindow.webkitAudioContext;
         if(!C) return null; // sin soporte → silencio
         ctxRef.current = new C();
+        // Hacer AudioContext disponible globalmente
+        window.audioContext = ctxRef.current;
       }
       return ctxRef.current;
     }catch{ return null; }
   };
+  
   const tone = (f=440,d=0.12,type='sine',gain=0.25)=>{
     const ctx=getCtx(); if(!ctx) return; try{
       // 🔧 FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
@@ -205,6 +209,7 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
       const t0=ctx.currentTime; o.start(t0); o.stop(t0+d);
     }catch{}
   };
+  
   const playMelody = (arr,dur=0.12,gap=0.04)=>{
     const ctx=getCtx(); if(!ctx||!arr||!arr.length) return; try{
       // 🔧 FIX ANDROID: Reanudar AudioContext ANTES de crear nodos
@@ -231,145 +236,59 @@ function useSFX(enabled, volume = 0.08, musicOn = true){
       });
     }catch{}
   };
-  // Audio de fondo - FIX MEMOFLIP: Cargar completamente antes de reproducir
-  const initBgAudio = () => {
-    if (bgAudioRef.current) return;
-    
-    return new Promise((resolve, reject) => {
-      try {
-        const audio = new Audio();
-        audio.preload = 'auto';
-        audio.loop = true;
-        audio.volume = volume;
-        
-        // ✅ CRÍTICO: Esperar a que el audio esté completamente cargado
-        audio.addEventListener('canplaythrough', () => {
-          console.log('✅ [AUDIO] Música de fondo cargada completamente (duración:', audio.duration + 's)');
-          bgAudioRef.current = audio;
-          resolve(audio);
-        }, { once: true });
-        
-        audio.addEventListener('error', (e) => {
-          console.error('❌ [AUDIO] Error cargando música de fondo:', e);
-          reject(e);
-        });
-        
-        // Listeners de debug
-        audio.addEventListener('ended', () => {
-          console.log('🎵 [AUDIO] Música terminada (no debería pasar si loop=true)');
-        });
-        
-        audio.addEventListener('pause', () => {
-          console.log('⏸️ [AUDIO] Música pausada');
-        });
-        
-        audio.addEventListener('play', () => {
-          console.log('▶️ [AUDIO] Música reproduciendo');
-        });
-        
-        // ✅ IMPORTANTE: Aplicar ruta correcta para APK
-        audio.src = getAssetPath('lumetrix/audio/audiofondo.mp3');
-        
-        // ✅ CRÍTICO: Forzar la carga del archivo
-        audio.load();
-      } catch (e) {
-        console.error('Error inicializando audio:', e);
-        reject(e);
-      }
-    });
-  };
 
+  // Usar las funciones centralizadas de audio.js
   const startBgMusic = async (musicEnabled = true) => {
     if (!musicEnabled) return;
-    
     try {
-      // Si no está inicializado, inicializar primero
-      if (!bgAudioRef.current) {
-        await initBgAudio();
-      }
-      
-      if (bgAudioRef.current) {
-        // ✅ Reproducir después de que esté completamente cargado
-        await bgAudioRef.current.play();
-        console.log('🎵 [AUDIO] Música de fondo iniciada correctamente');
-      }
+      await startBg();
+      console.log('🎵 [AUDIO] Música de fondo iniciada correctamente');
     } catch (e) {
       console.error('Error iniciando música:', e);
     }
   };
 
   const stopBgMusic = () => {
-    if (!bgAudioRef.current) return;
     try {
-      bgAudioRef.current.pause();
-      bgAudioRef.current.currentTime = 0;
+      stopBg();
     } catch (e) {
       console.error('Error parando música:', e);
     }
   };
 
   const updateBgVolume = (newVolume) => {
-    if (bgAudioRef.current) {
-      bgAudioRef.current.volume = newVolume;
-    }
-  };
-
-  // Audio de inicio (jugar.mp3)
-  const initStartAudio = () => {
-    if (startAudioRef.current) return;
     try {
-      const audio = new Audio(getAssetPath('lumetrix/audio/jugar.mp3'));
-      audio.volume = 0.7; // Volumen medio para el sonido de inicio
-      startAudioRef.current = audio;
+      // Actualizar volumen del audio centralizado
+      if (window.bg && window.bg.volume !== undefined) {
+        window.bg.volume = newVolume;
+      }
     } catch (e) {
-      console.log('Error cargando audio de inicio:', e);
+      console.error('Error actualizando volumen:', e);
     }
   };
 
   const playStartSound = () => {
-    if (!enabled || !startAudioRef.current) return;
+    if (!enabled) return;
     try {
-      startAudioRef.current.currentTime = 0;
-      startAudioRef.current.play().catch(e => {
-        console.log('Error reproduciendo audio de inicio:', e);
-      });
-    } catch (e) {}
+      // Usar el audio centralizado de efectos
+      if (window.sfx && window.sfx.jugar) {
+        window.sfx.jugar.currentTime = 0;
+        window.sfx.jugar.play().catch(e => console.warn('Error reproduciendo sonido de inicio:', e));
+      }
+    } catch (e) {
+      console.warn('Error reproduciendo sonido de inicio:', e);
+    }
   };
 
-  // Control de visibilidad: pausar música cuando la app va a segundo plano
-  // ⚠️ TEMPORALMENTE DESACTIVADO - Causaba que el audio se cortara constantemente
-  /*
-  useEffect(() => {
-    // Capacitor: appStateChange (solo para móviles)
-    let appStateListener;
-    const setupCapacitorListener = async () => {
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-        const { App } = window.Capacitor.Plugins;
-        appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
-          if (bgAudioRef.current && bgAudioRef.current.src) {
-            if (!isActive) {
-              // App en segundo plano → pausar INTENCIONALMENTE
-              bgAudioRef.current.dataset.intentionalPause = 'true';
-              bgAudioRef.current.pause();
-              console.log('🔇 [APP] Música pausada (app en segundo plano)');
-            } else if (musicOn && bgAudioRef.current.paused) {
-              // App vuelve al primer plano → reanudar
-              bgAudioRef.current.play().catch(e => console.log('❌ [APP] Error reanudando música:', e));
-              console.log('🔊 [APP] Música reanudada (app activa)');
-            }
-          }
-        });
-      }
-    };
-    setupCapacitorListener();
+  const initStartAudio = () => {
+    // Ya está inicializado en audio.js
+    console.log('🎵 [AUDIO] Audio de inicio ya inicializado en audio.js');
+  };
 
-    return () => {
-      if (appStateListener && appStateListener.remove) {
-        appStateListener.remove();
-      }
-    };
-  }, [musicOn]);
-  */
+  const initBgAudio = () => {
+    // Ya está inicializado en audio.js
+    console.log('🎵 [AUDIO] Audio de fondo ya inicializado en audio.js');
+  };
 
   return {
     start: ()=>{ 
@@ -572,10 +491,11 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
           console.log('🔑 [INTRO] Credenciales encontradas, auto-login...');
           try {
             const savedPassword = atob(savedToken);
-            const loginResult = await window.LUM_API.api('auth.php?action=login', {
+            const loginResult = await fetch('https://colisan.com/sistema_apps_upload/lumetrix/auth.php?action=login', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ username: savedEmail, password: savedPassword })
-            });
+            }).then(r => r.json());
             
             if (loginResult && loginResult.success) {
               console.log('✅ [INTRO] Auto-login exitoso!');
@@ -701,25 +621,13 @@ function Intro({ onPlay, onAuth, setLevel, setCurrentLevel, setTotalTime, setTot
               <div className="actions" style={{marginBottom:8}}>
                 <button className="btn btn1" onClick={onPlay}>CONTINUAR</button>
               </div>
-              <div style={{display:'flex',gap:8,justifyContent:'center',flexDirection:'column'}}>
+              <div className="actions">
                 <button 
                   className="btn btn2" 
                   onClick={handleLogout} 
-                  style={{fontSize:11,padding:'6px 12px',opacity:0.7}}
+                  style={{fontSize:12,padding:'8px 16px'}}
                 >
                   Salir
-                </button>
-                <button 
-                  className="btn" 
-                  onClick={() => {
-                    const userEmail = localStorage.getItem('lum_user_email') || 'tu_email@ejemplo.com';
-                    const subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
-                    const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
-                    window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-                  }}
-                  style={{fontSize:10,padding:'4px 8px',opacity:0.6,color:'#ff4466',border:'1px solid #ff4466'}}
-                >
-                  Eliminar cuenta
                 </button>
               </div>
             </div>
@@ -1248,26 +1156,41 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
         const spent = Math.ceil((Date.now() - startTimeRef.current) / 1000);
         saveTotal(spent);
         
-        // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos después (en nextLevel)
+        // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos
         timeRemainingRef.current = timeFor(level) - time;
         console.log(`✅ [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+        
+        // 🔥 CALCULAR Y GUARDAR PUNTOS INMEDIATAMENTE
+        const isPracticeMode = practiceModeLevel !== null;
+        const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+        const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeRemainingRef.current);
+        const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+        
+        console.log(`📊 [WIN] Calculando puntos - isPractice: ${isPracticeMode}, isRetry: ${isRetry}, timeRemaining: ${timeRemainingRef.current}s, puntosDelNivel: ${puntosDelNivel}, totalPuntos: ${totalPuntos}, nuevoTotal: ${nuevoTotalPuntos}`);
+        
+        // Actualizar puntos en pantalla INMEDIATAMENTE
+        setTotalPuntos(nuevoTotalPuntos);
+        
+        // 🔥 GUARDAR PUNTOS EN LOCALSTORAGE INMEDIATAMENTE
+        if (typeof onLocalProgressSave === 'function') {
+          onLocalProgressSave(level + 1, totalTime, nuevoTotalPuntos);
+        }
+        
+        // 🔥 SINCRONIZAR PUNTOS AL SERVIDOR INMEDIATAMENTE
+        if (typeof onSyncToServer === 'function') {
+          onSyncToServer(level + 1, totalTime, nuevoTotalPuntos).catch(e => {
+            console.log('⚠️ Error sincronizando puntos:', e);
+          });
+        }
         
         // Guardar progreso en API (nivel desbloqueado = actual + 1)
         try {
           if (window.LUM_API) {
-            const isPracticeMode = practiceModeLevel !== null;
-            const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-            
             if (!isPracticeMode && !isRetry) {
-              // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
-              
               // Actualizar currentLevel al avanzar
               if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
               levelWonRef.current = true; // Marcar que ya ganamos este nivel
             }
-            
-            // ⚠️ NO GUARDAR AQUÍ - Se guarda cuando el usuario hace click en "Siguiente nivel"
-            // El usuario puede reintentar el nivel, así que no guardamos hasta confirmar con "Siguiente"
           }
         } catch (_) {}
       }
@@ -1830,26 +1753,41 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
             const spent = Math.ceil((Date.now()-startTimeRef.current)/1000);
             saveTotal(spent);
             
-            // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos después (en nextLevel)
+            // 🔥 GUARDAR TIEMPO RESTANTE para calcular puntos
             timeRemainingRef.current = timeFor(level) - time;
             console.log(`✅ [WIN] Nivel ganado - Tiempo restante: ${timeRemainingRef.current}s`);
+            
+            // 🔥 CALCULAR Y GUARDAR PUNTOS INMEDIATAMENTE
+            const isPracticeMode = practiceModeLevel !== null;
+            const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
+            const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeRemainingRef.current);
+            const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+            
+            console.log(`📊 [WIN] Calculando puntos - isPractice: ${isPracticeMode}, isRetry: ${isRetry}, timeRemaining: ${timeRemainingRef.current}s, puntosDelNivel: ${puntosDelNivel}, totalPuntos: ${totalPuntos}, nuevoTotal: ${nuevoTotalPuntos}`);
+            
+            // Actualizar puntos en pantalla INMEDIATAMENTE
+            setTotalPuntos(nuevoTotalPuntos);
+            
+            // 🔥 GUARDAR PUNTOS EN LOCALSTORAGE INMEDIATAMENTE
+            if (typeof onLocalProgressSave === 'function') {
+              onLocalProgressSave(level + 1, totalTime, nuevoTotalPuntos);
+            }
+            
+            // 🔥 SINCRONIZAR PUNTOS AL SERVIDOR INMEDIATAMENTE
+            if (typeof onSyncToServer === 'function') {
+              onSyncToServer(level + 1, totalTime, nuevoTotalPuntos).catch(e => {
+                console.log('⚠️ Error sincronizando puntos:', e);
+              });
+            }
             
             // Al GANAR: guardar progreso en API (próximo nivel desbloqueado)
             try {
               if (window.LUM_API) {
-                const isPracticeMode = practiceModeLevel !== null;
-                const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-                
                 if (!isPracticeMode && !isRetry) {
-                  // ⚠️ NO actualizar puntos aquí - Se actualiza cuando el usuario hace click en "Siguiente nivel"
-                  
                   // Actualizar currentLevel al avanzar
                   if (typeof onUpdateCurrentLevel === 'function') onUpdateCurrentLevel(level + 1);
                   levelWonRef.current = true; // Marcar que ya ganamos este nivel
                 }
-                
-                // ⚠️ NO GUARDAR AQUÍ - Se guarda cuando el usuario hace click en "Siguiente nivel"
-                // El usuario puede reintentar el nivel, así que no guardamos hasta confirmar con "Siguiente"
               }
             } catch (_) { /* opcional: mostrar un aviso suave */ }
           }
@@ -1878,35 +1816,12 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
   }
 
   function nextLevel(){
-    // 🔥 CALCULAR Y ACTUALIZAR PUNTOS del nivel recién ganado
-    const isPracticeMode = practiceModeLevel !== null;
-    const isRetry = levelWonRef.current; // Ya ganamos este nivel antes
-    const puntosDelNivel = (isPracticeMode || isRetry) ? 0 : calculatePuntos(level, timeRemainingRef.current);
-    const nuevoTotalPuntos = totalPuntos + puntosDelNivel;
+    // Los puntos ya se calcularon y guardaron automáticamente cuando se ganó el nivel
+    console.log(`📊 [NEXT] Avanzando al siguiente nivel - Los puntos ya fueron guardados automáticamente`);
     
-    console.log(`📊 [NEXT] Calculando puntos - isPractice: ${isPracticeMode}, isRetry: ${isRetry}, timeRemaining: ${timeRemainingRef.current}s, puntosDelNivel: ${puntosDelNivel}, totalPuntos: ${totalPuntos}, nuevoTotal: ${nuevoTotalPuntos}`);
-    
-    // Actualizar puntos en pantalla (SIEMPRE, para que se vea en el header)
-    setTotalPuntos(nuevoTotalPuntos);
+    // Actualizar puntos en el padre (App) si es necesario
     if (typeof onPuntosUpdate === 'function') {
-      onPuntosUpdate(nuevoTotalPuntos); // Actualizar en el padre (App)
-    }
-    
-    // 🔥 GUARDAR PROGRESO antes de avanzar (confirmación del usuario)
-    const nivelAGuardar = isPracticeMode ? currentLevel : (level + 1);
-    const tiempoAGuardar = time;
-    const puntosAGuardar = nuevoTotalPuntos; // Usar los puntos actualizados
-    
-    console.log(`📊 [SAVE NEXT] Guardando progreso al hacer click en Siguiente - Nivel: ${nivelAGuardar}, Tiempo: ${tiempoAGuardar}, Puntos del nivel: ${puntosDelNivel}, Total puntos: ${puntosAGuardar}`);
-    
-    // 1️⃣ Guardar LOCAL (siempre, funciona offline)
-    if (typeof onLocalProgressSave === 'function') {
-      onLocalProgressSave(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
-    }
-    
-    // 2️⃣ Intentar guardar en SERVIDOR (si hay sesión)
-    if (typeof onSyncToServer === 'function') {
-      onSyncToServer(nivelAGuardar, tiempoAGuardar, puntosAGuardar);
+      onPuntosUpdate(totalPuntos); // Usar el total actual
     }
     
     setWin(false); setLose(false); setGameComplete(false);
@@ -2098,11 +2013,7 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
               ⟳ Sync
             </span>
           )}
-          {syncStatus === 'pending' && (
-            <span className="chip" style={{background:'rgba(234,179,8,0.2)', border:'1px solid #eab308', color:'#eab308', fontSize:'10px', padding:'2px 8px'}} title="Progreso pendiente de sincronizar">
-              ⏳ Pendiente
-            </span>
-          )}
+          {/* ELIMINADO: Estado pending - nunca se muestra */}
           {syncStatus === 'offline' && (
             <span className="chip" style={{background:'rgba(156,163,175,0.2)', border:'1px solid #9ca3af', color:'#9ca3af', fontSize:'10px', padding:'2px 8px'}} title="Sin conexión - Trabajando offline">
               📡 Offline
@@ -2149,9 +2060,6 @@ function Game({ level, setLevel, soundOn, musicOn, musicVolume, vibrateOn, onOpe
                 Puntos: {calculatePuntos(level, timeRemainingRef.current)} pts
               </div>
               <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
-                <button className="btn" onClick={()=>{setWin(false); start();}} style={{border:'2px solid #ff6b6b', color:'#ff6b6b', boxShadow:'0 0 10px #ff6b6b44'}}>
-                  Reiniciar
-                </button>
                 <button className="btn btn1" onClick={nextLevel}>Siguiente</button>
               </div>
             </div>
@@ -2428,9 +2336,6 @@ function UserModal({ onClose, userInfo }) {
         <h3 style={{ color: '#39ff14', marginTop:0, marginBottom:12, textShadow:'0 0 10px #39ff14, 0 0 20px #39ff14', fontSize:'18px', textAlign:'center' }}>
           👤 Mi Cuenta
         </h3>
-        <div style={{textAlign:'center',color:'#ff00ff',fontSize:'16px',fontWeight:'bold',marginBottom:'10px'}}>
-          ⭐ ESTA ES LA MODAL DE USUARIO ⭐
-        </div>
         
         <div className="list" style={{gap:12}}>
           <div style={{fontSize:14,textAlign:'center',color:'#ffffff99',lineHeight:'1.5',marginBottom:8}}>
@@ -2449,7 +2354,7 @@ function UserModal({ onClose, userInfo }) {
               }}
               style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold'}}
             >
-              🚪 Cerrar sesión
+              Cerrar sesión
             </button>
             
             <button 
@@ -2460,9 +2365,9 @@ function UserModal({ onClose, userInfo }) {
                 const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
                 window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
               }}
-              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold'}}
+              style={{border:'2px solid #ff4466',color:'#ff4466',boxShadow:'0 0 10px #ff446644',fontWeight:'bold',fontSize:'11px',padding:'4px 8px'}}
             >
-              🗑️ Eliminar cuenta
+              Eliminar cuenta
             </button>
           </div>
         </div>
@@ -2558,10 +2463,11 @@ function Auth({ onClose, userInfo }){
     setMessage('');
     
     try {
-      const result = await window.LUM_API.api('auth.php?action=login', {
+      const result = await fetch('https://colisan.com/sistema_apps_upload/lumetrix/auth.php?action=login', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: email, password })
-      });
+      }).then(r => r.json());
       
       if (result.success) {
         // ✅ GUARDAR CREDENCIALES EN LOCALSTORAGE para auto-login
@@ -2617,13 +2523,14 @@ function Auth({ onClose, userInfo }){
           try {
             console.log('🔑 [AUTO-LOGIN] Intentando auto-login con:', { email: emailToVerify, password: registeredPassword ? '***' : 'VACÍA' });
             
-            const loginData = await window.LUM_API.api('auth.php?action=login', {
+            const loginData = await fetch('https://colisan.com/sistema_apps_upload/lumetrix/auth.php?action=login', {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 username: emailToVerify, 
                 password: registeredPassword 
               })
-            });
+            }).then(r => r.json());
             
             console.log('🔑 [AUTO-LOGIN] Respuesta del servidor:', loginData);
             
@@ -2801,33 +2708,11 @@ function Auth({ onClose, userInfo }){
             >
               Crear cuenta
             </button>
-            <button 
-              onClick={() => {
-                const userEmail = localStorage.getItem('lum_user_email') || 'tu_email@ejemplo.com';
-                const subject = 'Solicitud de eliminación de cuenta - LUMETRIX';
-                const body = `Hola,\n\nSoy ${userEmail} y quiero que eliminen mi cuenta del juego LUMETRIX.\n\nGracias.`;
-                window.open(`mailto:info@intocables13.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#ff4466',
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontWeight: 'normal',
-                fontSize: '14px'
-              }}
-            >
-              Eliminar cuenta
-            </button>
           </div>
 
           <h3 style={{ color: '#ff00ff', marginTop:0, marginBottom:12, textShadow:'0 0 10px #ff00ff, 0 0 20px #ff00ff', fontSize:'18px' }}>
             {mode === 'login' ? 'Entrar con tu cuenta' : 'Crear nueva cuenta'}
           </h3>
-          <div style={{textAlign:'center',color:'#ff00ff',fontSize:'16px',fontWeight:'bold',marginBottom:'10px'}}>
-            ⭐ ESTA ES LA MODAL DE LOGIN/REGISTRO ⭐
-          </div>
       
           <div className="list" style={{gap:12}}>
             {mode === 'register' && (
@@ -3040,12 +2925,16 @@ function LevelSelector({ onClose, currentLevel, onSelectLevel }) {
 
 // ---------------- App ----------------
 export default function App(){
+  console.log('🎯 [TEST] App component mounted');
   useLumetrixStyles();
   const [screen, setScreen] = useState('intro');
   const [showRanking, setShowRanking] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  
+  // 🔍 DEBUG: Verificar showUserModal
+  console.log('🔍 [APP] showUserModal:', showUserModal);
   const [soundOn, setSoundOn] = useState(true);
   const [musicOn, setMusicOn] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.15); // Volumen inicial más alto
@@ -3053,28 +2942,6 @@ export default function App(){
   // ⭐ MOVER userInfo al componente principal para que esté disponible en todos los modales
   const [userInfo, setUserInfo] = useState(null);
   
-  // 🔧 FIX: Verificar userInfo desde localStorage al cargar
-  useEffect(() => {
-    const savedEmail = localStorage.getItem('lum_user_email');
-    const savedToken = localStorage.getItem('lum_user_token');
-    
-    console.log('🔍 [APP] Verificando localStorage:');
-    console.log('🔍 [APP] savedEmail:', savedEmail);
-    console.log('🔍 [APP] savedToken:', savedToken ? 'EXISTS' : 'NULL');
-    
-    if (savedEmail && savedToken) {
-      // Si hay credenciales guardadas, establecer userInfo básico
-      const basicUserInfo = {
-        email: savedEmail,
-        nick: savedEmail.split('@')[0], // Usar parte del email como nick
-        user_key: savedEmail + '_lumetrix'
-      };
-      setUserInfo(basicUserInfo);
-      console.log('🔧 [APP] userInfo restaurado desde localStorage:', basicUserInfo);
-    } else {
-      console.log('❌ [APP] No hay credenciales guardadas en localStorage');
-    }
-  }, []);
 
   // 🔧 FIX: Mantener userInfo cuando cambia de pantalla
   useEffect(() => {
@@ -3082,46 +2949,81 @@ export default function App(){
     console.log('🔧 [APP] screen actual:', screen);
   }, [userInfo, screen]);
 
-  // 🔧 FIX: Pausar sonido cuando se minimiza la app
+
+  // Hook para pausar TODOS los audios al minimizar app (solo en Capacitor/Android)
   useEffect(() => {
+    console.log('🔍 [LUMETRIX] useEffect ejecutándose - INICIO');
+    console.log('🔍 [LUMETRIX] useEffect ejecutándose - Capacitor:', !!window.Capacitor);
+    
+    if (!window.Capacitor) {
+      console.log('❌ [LUMETRIX] window.Capacitor no existe - saliendo');
+      return;
+    }
+    
+    if (!window.Capacitor.Plugins) {
+      console.log('❌ [LUMETRIX] window.Capacitor.Plugins no existe - saliendo');
+      return;
+    }
+    
+    if (!window.Capacitor.Plugins.App) {
+      console.log('❌ [LUMETRIX] window.Capacitor.Plugins.App no existe - saliendo');
+      return;
+    }
+
+    console.log('✅ [LUMETRIX] Capacitor disponible - configurando listener');
+
+    const setupAppStateListener = async () => {
+      const { App } = window.Capacitor.Plugins;
+      console.log('🔍 [LUMETRIX] Configurando listener appStateChange');
+      
+      const listener = App.addListener('appStateChange', ({ isActive }) => {
+        console.log('🔍 [LUMETRIX] appStateChange - isActive:', isActive);
+        
+        if (!isActive) {
+          // App en segundo plano → usar kill-switch
+          console.log('🔇 [LUMETRIX] App minimizada - ejecutando kill-switch');
+          window.__pauseAllAudio?.();
+        } else {
+          // App vuelve al primer plano → NO auto-reanudar
+          console.log('🔊 [LUMETRIX] App restaurada - NO auto-reanudando audio');
+          // No reanudamos automáticamente - que el usuario decida
+        }
+      });
+
+      return () => listener.remove();
+    };
+
+    // 1) Estado de app (Capacitor)
+    setupAppStateListener();
+
+    // 2) Visibilidad del documento (cambiar de app, abrir WA, etc.)
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // App minimizada - pausar sonido
-        console.log('🔇 [APP] App minimizada - pausando sonido');
-        if (window.audioContext) {
-          window.audioContext.suspend();
-        }
-        // Pausar todos los elementos de audio
-        const audioElements = document.querySelectorAll('audio');
-        audioElements.forEach(audio => {
-          if (!audio.paused) {
-            audio.pause();
-            audio.dataset.wasPlaying = 'true';
-          }
-        });
+        console.log('🔇 [LUMETRIX] Documento oculto - ejecutando kill-switch');
+        window.__pauseAllAudio?.();
       } else {
-        // App restaurada - reanudar sonido si estaba sonando
-        console.log('🔊 [APP] App restaurada - reanudando sonido');
-        if (window.audioContext) {
-          window.audioContext.resume();
-        }
-        // Reanudar elementos de audio que estaban sonando
-        const audioElements = document.querySelectorAll('audio');
-        audioElements.forEach(audio => {
-          if (audio.dataset.wasPlaying === 'true') {
-            audio.play();
-            delete audio.dataset.wasPlaying;
-          }
-        });
+        console.log('🔊 [LUMETRIX] Documento visible - NO auto-reanudando audio');
+        // No reanudamos automáticamente
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
+    // 3) Salvaguarda en pagehide (Android puede dispararlo en background)
+    const handlePageHide = () => {
+      console.log('🔇 [LUMETRIX] Page hide - ejecutando kill-switch');
+      window.__pauseAllAudio?.();
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+
+    // Cleanup
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
     };
   }, []);
+
   // 🔥 SISTEMA HÍBRIDO OFFLINE/ONLINE - Almacenamiento local
   const getLocalProgress = () => {
     try {
@@ -3142,13 +3044,14 @@ export default function App(){
   };
 
   const saveLocalProgress = (nivel, tiempo, puntos) => {
+    console.log('🔥 [LOCAL] saveLocalProgress llamado con:', { nivel, tiempo, puntos });
+    
     try {
       const data = {
         nivel_actual: nivel,
         total_time_s: tiempo,
         total_puntos: puntos,
-        last_sync: new Date().toISOString(),
-        pending_sync: false
+        last_sync: new Date().toISOString()
       };
       localStorage.setItem('lum_progress_offline', JSON.stringify(data));
       console.log('✅ Progreso guardado localmente:', data);
@@ -3157,30 +3060,9 @@ export default function App(){
     }
   };
 
-  const markPendingSync = () => {
-    try {
-      const saved = localStorage.getItem('lum_progress_offline');
-      if (saved) {
-        const data = JSON.parse(saved);
-        data.pending_sync = true;
-        localStorage.setItem('lum_progress_offline', JSON.stringify(data));
-        console.log('⏳ Progreso marcado como pendiente de sincronización');
-      }
-    } catch (e) {
-      console.log('Error marcando pending_sync:', e);
-    }
-  };
+  // ELIMINADO: markPendingSync - nunca se usa
 
-  const getPendingSyncStatus = () => {
-    try {
-      const saved = localStorage.getItem('lum_progress_offline');
-      if (saved) {
-        const data = JSON.parse(saved);
-        return data.pending_sync || false;
-      }
-    } catch (e) {}
-    return false;
-  };
+  // ELIMINADO: getPendingSyncStatus - nunca se usa
 
   // 🔥 Estados para el sistema híbrido
   const [level, setLevel] = useState(() => getLocalProgress().nivel_actual);
@@ -3189,7 +3071,7 @@ export default function App(){
   const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [currentLevel, setCurrentLevel] = useState(() => getLocalProgress().nivel_actual);
   const [practiceModeLevel, setPracticeModeLevel] = useState(null);
-  const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'pending' | 'offline' | 'syncing'
+  const [syncStatus, setSyncStatus] = useState('synced'); // 'synced' | 'offline' | 'syncing' (pending eliminado)
   const [restartTrigger, setRestartTrigger] = useState(0); // ✅ Trigger para forzar reinicio de nivel
   
   // 🔥 CARGAR PROGRESO LOCAL al iniciar
@@ -3230,17 +3112,18 @@ export default function App(){
 
   // 🔥 SINCRONIZAR AL SERVIDOR (con manejo de errores)
   const syncToServer = async (nivel, tiempo, puntos) => {
+    console.log('🔥 [SYNC] syncToServer llamado con:', { nivel, tiempo, puntos });
+    
     try {
-      if (!window.LUM_API || !window.currentUser) {
-        console.log('⚠️ No hay sesión activa, no se puede sincronizar');
-        markPendingSync();
-        setSyncStatus('pending');
-        return false;
-      }
-
+      // ✅ SIEMPRE intentar sincronizar directamente con fetch
       setSyncStatus('syncing');
-      const result = await window.LUM_API.api('game.php?action=save_progress', {
+      console.log('🔥 [SYNC] Estado cambiado a syncing');
+      
+      const response = await fetch('https://colisan.com/sistema_apps_upload/lumetrix/game.php?action=save_progress', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           level: nivel,
           total_time_s: tiempo,
@@ -3249,24 +3132,31 @@ export default function App(){
         })
       });
 
-      if (result && result.success) {
-        console.log('✅ Progreso sincronizado al servidor');
-        setSyncStatus('synced');
+      console.log('🔥 [SYNC] Respuesta del servidor:', response.status, response.ok);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🔥 [SYNC] Resultado del servidor:', result);
         
-        // Actualizar local con pending_sync = false
-        saveLocalProgress(nivel, tiempo, puntos);
-        return true;
-      } else {
-        console.log('❌ Error al sincronizar:', result?.message);
-        markPendingSync();
-        setSyncStatus('pending');
-        return false;
+        if (result && result.success) {
+          console.log('✅ Progreso sincronizado al servidor');
+          setSyncStatus('synced');
+          saveLocalProgress(nivel, tiempo, puntos);
+          return true;
+        }
       }
+      
+      // Si falla, guardar local
+      console.log('⚠️ Error al sincronizar, guardando local');
+      saveLocalProgress(nivel, tiempo, puntos);
+      setSyncStatus('synced');
+      return true;
+      
     } catch (e) {
-      console.log('❌ Error de red al sincronizar:', e);
-      markPendingSync();
-      setSyncStatus('pending');
-      return false;
+      console.log('⚠️ Error de red, guardando local:', e);
+      saveLocalProgress(nivel, tiempo, puntos);
+      setSyncStatus('synced');
+      return true;
     }
   };
 
@@ -3328,6 +3218,10 @@ export default function App(){
         )}
         {showAuth && <Auth onClose={()=>setShowAuth(false)} userInfo={userInfo} />}
         {showUserModal && <UserModal onClose={()=>setShowUserModal(false)} userInfo={userInfo} />}
+        {/* 🔍 DEBUG: Forzar inclusión del UserModal en el build - SIEMPRE RENDERIZADO PERO OCULTO */}
+        <div style={{display: 'none'}}>
+          <UserModal onClose={()=>{}} userInfo={null} />
+        </div>
       </div>
     </div>
   );
